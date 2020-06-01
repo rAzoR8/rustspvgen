@@ -80,53 +80,68 @@ fn main() {
     //     println!("name {} opcode {}", elem.opname, elem.opcode);
     // }
 
+    
     if header
     {
-        let mut categories = HashSet::new();
-        println!("enum class OperandCategory : unsigned short\n{{");
-        for elem in &spv.operand_kinds {
-            if !categories.contains(&elem.category)
-            {
-                categories.insert(&elem.category);
-                println!("\t{},",elem.category);
-            }
-        }
-        println!("}};");
+        println!("#pragma once\n");
 
-        println!("enum class OperandKind : unsigned short\n{{");
-        for elem in &spv.operand_kinds {
-            println!("\t{},",elem.kind);
-        }
-        println!("}};");
+        println!("#include \"Vector.h\"");
+        println!("#include \"HashMap.h\"");
+        println!("#include \"SpvDefines.h\"\n");
 
-        println!("enum class Quantifier\n{{");
-            println!("\tOptional,");
-            println!("\tAnyCount");   
-        println!("}};");
-
-        println!("struct Operand\n{{");
-            println!("\tOperandKind kind;");
-            println!("\tOperandCategory category;");        
-            println!("\tconst char* name;");
-            println!("\tQuantifier quantifier;");
-        println!("}};");
-
-        println!("struct Instruction\n{{");
-            println!("\tconst char* name;");
-            println!("\tspv::Op opcode;");
-            println!("\tVector<Operand> operands;");
-        println!("}};");
+        println!("namespace spvgentwo\n{{");
 
         println!("class Grammar\n{{");
-        println!("public:");
-            println!("\tGrammar(IAllocator* _pAllocator)");
-        println!("private:");
+
+            let mut categories = HashSet::new();
+            println!("\tenum class OperandCategory : unsigned short\n\t{{");
+            for elem in &spv.operand_kinds {
+                if !categories.contains(&elem.category)
+                {
+                    categories.insert(&elem.category);
+                    println!("\t\t{},",elem.category);
+                }
+            }
+            println!("\t}};");
+
+            println!("\tenum class OperandKind : unsigned short\n\t{{");
+            for elem in &spv.operand_kinds {
+                println!("\t\t{},",elem.kind);
+            }
+            println!("\t}};");
+
+            println!("\tenum class Quantifier\n\t{{");
+                println!("\t\tOptional,");
+                println!("\t\tAnyCount");   
+            println!("\t}};");
+
+            println!("\tstruct Operand\n\t{{");
+                println!("\t\tOperandKind kind;");
+                println!("\t\tOperandCategory category;");        
+                println!("\t\tconst char* name;");
+                println!("\t\tQuantifier quantifier;");
+            println!("\t}};");
+
+            println!("\tstruct Instruction\n\t{{");
+                println!("\t\tconst char* name;");
+                println!("\t\tspv::Op opcode;");
+                println!("\t\tVector<Operand> operands;");
+            println!("\t}};");
+
+        println!("\tpublic:");
+            println!("\t\tGrammar(IAllocator* _pAllocator);");
+        println!("\tprivate:");
             //println!("\tVector<Instruction> m_instructions;");
-            println!("\tHashMap<spv::Op, Instruction> m_instructions;");
+            println!("\t\tHashMap<spv::Op, Instruction> m_instructions;");
         println!("}};");
+
+        println!("}} // spvgentwo"); // namespace
     }
     else // cpp
     {
+        println!("#include \"spvgentwo/Grammar.h\"\n");
+        println!("using namespace spvgentwo;\n");
+
         let mut kinds = HashMap::new();
         for elem in &spv.operand_kinds {
             kinds.insert(&elem.kind, &elem.category);
@@ -135,11 +150,10 @@ fn main() {
         println!("Grammar::Grammar(IAllocator* _pAllocator) : m_instructions(_pAllocator)\n{{");
         for instr in spv.instructions
         {
-            println!("\tm_instructions.emplaceUnique(spv::{}, {{\"{}\", spv::{}, _pAllocator}});", instr.opname, instr.opname, instr.opname);
+            println!("\tm_instructions.emplaceUnique(spv::Op::{}, Instruction{{\"{}\", spv::Op::{}, _pAllocator}});", instr.opname, instr.opname, instr.opname);
         }
         println!("}};"); // constructor
     }
-
 
     //let mut ofile = File::create("spvgrammer.inl").expect("unable to create file");
     //ofile.write_all(output.as_bytes()).expect("unable to write");

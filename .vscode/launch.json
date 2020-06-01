@@ -9,7 +9,7 @@
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/target/debug/rustspvgen.exe",
-            "args": ["spirv.core.grammar.json"],
+            "args": ["spirv.core.grammar.json", "--header"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],
