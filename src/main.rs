@@ -117,11 +117,111 @@ fn main() {
         }
 
         println!("\tenum class Op : unsigned\n\t{{");
-        for instr in spv.instructions
+        for instr in &spv.instructions
         {
             println!("\t\t{} = {},", instr.opname, instr.opcode);
         }
         println!("\t}};");
+
+        // HasResultAndType
+        {
+            println!("\tinline void HasResultAndType(Op opcode, bool *hasResult, bool *hasResultType) {{");
+            println!("\t\t*hasResult = *hasResultType = false;");
+            println!("\t\tswitch (opcode) {{");
+            println!("\t\tdefault: /* unknown opcode */ break;");
+
+            let mut opcodes = HashSet::new();
+            for instr in &spv.instructions
+            {
+                if opcodes.contains(&instr.opcode) { continue; }
+                opcodes.insert(instr.opcode);
+
+                match &instr.operands
+                {
+                    Some(ops) =>
+                    {
+                        let mut res_type = false;
+                        let mut res = false;
+                        for operand in ops {
+                            if operand.kind == "IdResultType" { res_type = true;}
+                            if operand.kind == "IdResult" { res = true;}
+                            if res && res_type {break;}
+                        }
+                        if res || res_type {
+                            println!("\t\tcase Op::{}: *hasResult = {}; *hasResultType = {}; break;", instr.opname, res, res_type);
+                        }
+                    }
+                    None => {}
+                }            
+            }
+
+            println!("\t\t}}");
+            println!("\t}}");
+        }
+
+        // HasResult
+        {
+            println!("\tinline constexpr bool HasResult(Op opcode) {{");
+            println!("\t\tswitch (opcode) {{");
+            println!("\t\tdefault: return true; // majority of instructions has a result");
+
+            let mut opcodes = HashSet::new();        
+
+            for instr in &spv.instructions
+            {
+                if opcodes.contains(&instr.opcode) { continue; }
+                opcodes.insert(instr.opcode);
+                match &instr.operands
+                {
+                    Some(ops) =>
+                    {
+                        let mut res = false;
+                        for operand in ops {
+                            if operand.kind == "IdResult" { res = true; break;}
+                        }
+                        if res == false {
+                            println!("\t\tcase Op::{}: return false;", instr.opname);
+                        }
+                    }
+                    None => {}
+                }            
+            }
+
+            println!("\t\t}}");
+            println!("\t}}");
+        }
+
+        // HasResultType
+        {
+            println!("\tinline constexpr bool HasResultType(Op opcode) {{");
+            println!("\t\tswitch (opcode) {{");
+            println!("\t\tdefault: return true; // majority of instructions has a result type");
+
+            let mut opcodes = HashSet::new();        
+
+            for instr in &spv.instructions
+            {
+                if opcodes.contains(&instr.opcode) { continue; }
+                opcodes.insert(instr.opcode);
+                match &instr.operands
+                {
+                    Some(ops) =>
+                    {
+                        let mut res = false;
+                        for operand in ops {
+                            if operand.kind == "IdResultType" { res = true; break;}
+                        }
+                        if res == false {
+                            println!("\t\tcase Op::{}: return false;", instr.opname);
+                        }
+                    }
+                    None => {}
+                }            
+            }
+
+            println!("\t\t}}");
+            println!("\t}}");
+        }
 
         println!("}} // spvgentwo::spv");
     }    
