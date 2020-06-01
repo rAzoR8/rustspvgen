@@ -313,13 +313,12 @@ fn main() {
         println!("\tpublic:");
             println!("\t\tGrammar(IAllocator* _pAllocator);");
         println!("\tprivate:");
-            //println!("\tVector<Instruction> m_instructions;");
             println!("\t\tHashMap<spv::Op, Instruction> m_instructions;");
         println!("}};");
 
         println!("}} // spvgentwo"); // namespace
     }
-    else // cpp
+    else if cpp // cpp
     {
         println!("#include \"spvgentwo/Grammar.h\"\n");
         println!("using namespace spvgentwo;\n");
@@ -332,12 +331,10 @@ fn main() {
         println!("Grammar::Grammar(IAllocator* _pAllocator) : m_instructions(_pAllocator)\n{{");
         for instr in spv.instructions
         {
-            //if instr.class != "@exclude" && instr.class != "Reserved"
             {
                 let ver: u32 = match instr.version
                 {
                     Some(s) => {
-                        //if s == "None" { continue }
                         let vec: Vec<&str> = s.split(".").collect();
                         if vec.len() == 2 {
                             let major: u32 = vec.first().unwrap().to_string().parse().unwrap();
@@ -353,7 +350,4 @@ fn main() {
         }
         println!("}};"); // constructor
     }
-
-    //let mut ofile = File::create("spvgrammer.inl").expect("unable to create file");
-    //ofile.write_all(output.as_bytes()).expect("unable to write");
 }
