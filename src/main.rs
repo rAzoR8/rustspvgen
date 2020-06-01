@@ -6,6 +6,8 @@ extern crate serde_json;
 extern crate serde;
 
 use serde_derive::Deserialize;
+use std::collections::HashSet;
+use std::collections::HashMap;
 
 #[derive(Deserialize)]
 struct Grammar {
@@ -68,35 +70,76 @@ struct Parameter
 fn main() {
     let args: Vec<String> = env::args().collect();
     let file = File::open(&args[1]).expect("file should open read only");
+
+    let header = args.len() > 2 && args[2] == "--header";
     let spv: Grammar = serde_json::from_reader(file).expect("file should be proper JSON");
 
-    println!("magic {} major {}", spv.magic_number, spv.major_version);
+    println!("// Auto generated - do not modify");
 
     // for elem in spv.instructions {
     //     println!("name {} opcode {}", elem.opname, elem.opcode);
     // }
 
-    for elem in spv.operand_kinds {
-        match elem.enumerants.as_ref()
-        {
-            Some(v) =>
+    if header
+    {
+        let mut categories = HashSet::new();
+        println!("enum class OperandCategory : unsigned short\n{{");
+        for elem in &spv.operand_kinds {
+            if !categories.contains(&elem.category)
             {
-                println!("enum class {} : unsigned int \n{{", elem.kind);
-                for enumval in v {
-                    print!("\t{} = ",enumval.enumerant);
-                    match &enumval.value
-                    {
-                        serde_json::Value::Number(x) => {print!("{},\n",x)},
-                        serde_json::Value::String(s) => {print!("{},\n",s)}
-                        _ => {}
-                    }
-                }
-                println!("}};");
-
-            },
-            None => {}
+                categories.insert(&elem.category);
+                println!("\t{},",elem.category);
+            }
         }
+        println!("}};");
+
+        println!("enum class OperandKind : unsigned short\n{{");
+        for elem in &spv.operand_kinds {
+            println!("\t{},",elem.kind);
+        }
+        println!("}};");
+
+        println!("enum class Quantifier\n{{");
+            println!("\tOptional,");
+            println!("\tAnyCount");   
+        println!("}};");
+
+        println!("struct Operand\n{{");
+            println!("\tOperandKind kind;");
+            println!("\tOperandCategory category;");        
+            println!("\tconst char* name;");
+            println!("\tQuantifier quantifier;");
+        println!("}};");
+
+        println!("struct Instruction\n{{");
+            println!("\tconst char* name;");
+            println!("\tspv::Op opcode;");
+            println!("\tVector<Operand> operands;");
+        println!("}};");
+
+        println!("class Grammar\n{{");
+        println!("public:");
+            println!("\tGrammar(IAllocator* _pAllocator)");
+        println!("private:");
+            //println!("\tVector<Instruction> m_instructions;");
+            println!("\tHashMap<spv::Op, Instruction> m_instructions;");
+        println!("}};");
     }
+    else // cpp
+    {
+        let mut kinds = HashMap::new();
+        for elem in &spv.operand_kinds {
+            kinds.insert(&elem.kind, &elem.category);
+        }
+
+        println!("Grammar::Grammar(IAllocator* _pAllocator) : m_instructions(_pAllocator)\n{{");
+        for instr in spv.instructions
+        {
+            println!("\tm_instructions.emplaceUnique(spv::{}, {{\"{}\", spv::{}, _pAllocator}});", instr.opname, instr.opname, instr.opname);
+        }
+        println!("}};"); // constructor
+    }
+
 
     //let mut ofile = File::create("spvgrammer.inl").expect("unable to create file");
     //ofile.write_all(output.as_bytes()).expect("unable to write");
