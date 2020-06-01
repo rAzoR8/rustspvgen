@@ -11,6 +11,7 @@ use std::collections::HashMap;
 
 #[derive(Deserialize)]
 struct Grammar {
+    copyright: Vec<String>,
     magic_number: String,
     major_version: u32,
     minor_version: u32,
@@ -47,13 +48,6 @@ struct OperandKinds {
 }
 
 #[derive(Deserialize)]
-enum EnumValue
-{
-    hex(String),
-    int(u32)
-}
-
-#[derive(Deserialize)]
 struct Enumerants {
     enumerant: String,
     value: serde_json::Value,
@@ -69,7 +63,6 @@ struct Parameter
     kind: String
 }
 
-
 fn main() {
     let args: Vec<String> = env::args().collect();
     let file = File::open(&args[1]).expect("file should open read only");
@@ -83,6 +76,10 @@ fn main() {
 
     if defs
     {
+        for line in spv.copyright {
+            println!("// {}", line); 
+        }
+
         println!("#pragma once\n");
         println!("namespace spvgentwo::spv\n{{");
 
