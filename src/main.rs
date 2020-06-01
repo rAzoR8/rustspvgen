@@ -12,9 +12,9 @@ use std::collections::HashMap;
 #[derive(Deserialize)]
 struct Grammar {
     magic_number: String,
-    major_version: i32,
-    minor_version: i32,
-    revision: i32,
+    major_version: u32,
+    minor_version: u32,
+    revision: u32,
     instructions: Vec<Instruction>,
     operand_kinds: Vec<OperandKinds>
 }
@@ -25,7 +25,10 @@ struct Instruction
     opname: String,
     class: String,
     opcode: u32,
-    operands: Option<Vec<Operand>>
+    operands: Option<Vec<Operand>>,
+    capabilities: Option<Vec<String>>,
+    extensions: Option<Vec<String>>,
+    version: Option<String>
 }
 
 #[derive(Deserialize)]
@@ -71,23 +74,64 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     let file = File::open(&args[1]).expect("file should open read only");
 
+    let defs = args.len() > 2 && args[2] == "--defs";
     let header = args.len() > 2 && args[2] == "--header";
+    let cpp = args.len() > 2 && args[2] == "--cpp";
     let spv: Grammar = serde_json::from_reader(file).expect("file should be proper JSON");
 
     println!("// Auto generated - do not modify");
 
-    // for elem in spv.instructions {
-    //     println!("name {} opcode {}", elem.opname, elem.opcode);
-    // }
+    if defs
+    {
+        println!("#pragma once\n");
+        println!("namespace spvgentwo::spv\n{{");
 
-    
-    if header
+        println!("\tusing Id = unsigned int;");
+        println!("\tstatic constexpr unsigned int MagicNumber = {};", spv.magic_number);
+        let version: u32 = spv.major_version << 16 | spv.minor_version << 8;
+        println!("\tstatic constexpr unsigned int Version = {};", version);
+        println!("\tstatic constexpr unsigned int Revision = {};", spv.revision);
+        println!("\tstatic constexpr unsigned int WordCountShift = 16;");
+
+        for op in &spv.operand_kinds {
+            match op.enumerants.as_ref()  {
+                Some(v) => {
+                    println!("\tenum class {} : unsigned\n\t{{", op.kind);
+                    for enumval in v {
+                        if op.kind == "Dim" && enumval.enumerant.len() == 2{
+                            print!("\t\tDim{} = ", enumval.enumerant);
+                        }else{
+                            print!("\t\t{} = ", enumval.enumerant);
+                        }
+                        match &enumval.value
+                        {
+                            serde_json::Value::Number(x) => {print!("{},\n", x)},
+                            serde_json::Value::String(s) => {print!("{},\n", s)}
+                            _ => {}
+                        }
+                    }
+                    println!("\t}};");    
+                },
+                None => {}
+            }          
+        }
+
+        println!("\tenum class Op : unsigned\n\t{{");
+        for instr in spv.instructions
+        {
+            println!("\t\t{} = {},", instr.opname, instr.opcode);
+        }
+        println!("\t}};");
+
+        println!("}} // spvgentwo::spv");
+    }    
+    else if header
     {
         println!("#pragma once\n");
 
         println!("#include \"Vector.h\"");
         println!("#include \"HashMap.h\"");
-        println!("#include \"SpvDefines.h\"\n");
+        println!("#include \"Spv.h\"\n");
 
         println!("namespace spvgentwo\n{{");
 
@@ -126,6 +170,9 @@ fn main() {
                 println!("\t\tconst char* name;");
                 println!("\t\tspv::Op opcode;");
                 println!("\t\tVector<Operand> operands;");
+                println!("\t\tVector<spv::Capability> capabilities;");
+                println!("\t\tVector<const char*> extensions;");
+                println!("\t\tunsigned int version;");
             println!("\t}};");
 
         println!("\tpublic:");
@@ -150,7 +197,24 @@ fn main() {
         println!("Grammar::Grammar(IAllocator* _pAllocator) : m_instructions(_pAllocator)\n{{");
         for instr in spv.instructions
         {
-            println!("\tm_instructions.emplaceUnique(spv::Op::{}, Instruction{{\"{}\", spv::Op::{}, _pAllocator}});", instr.opname, instr.opname, instr.opname);
+            //if instr.class != "@exclude" && instr.class != "Reserved"
+            {
+                let ver: u32 = match instr.version
+                {
+                    Some(s) => {
+                        //if s == "None" { continue }
+                        let vec: Vec<&str> = s.split(".").collect();
+                        if vec.len() == 2 {
+                            let major: u32 = vec.first().unwrap().to_string().parse().unwrap();
+                            let minor: u32 = vec.last().unwrap().to_string().parse().unwrap();
+                            (major << 16) | (minor << 8)
+                        }else {0} // fail case
+                    },
+                    None => 0
+                };
+
+                println!("\tm_instructions.emplaceUnique(spv::Op::{}, Instruction{{\"{}\", spv::Op::{}, _pAllocator, _pAllocator, _pAllocator, {}}});", instr.opname, instr.opname, instr.opname, ver);
+            }
         }
         println!("}};"); // constructor
     }
