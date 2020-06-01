@@ -91,32 +91,66 @@ fn main() {
         let version: u32 = spv.major_version << 16 | spv.minor_version << 8;
         println!("\tstatic constexpr unsigned int Version = {};", version);
         println!("\tstatic constexpr unsigned int Revision = {};", spv.revision);
+        println!("\tstatic constexpr unsigned int OpCodeMask = 0xffff;");
         println!("\tstatic constexpr unsigned int WordCountShift = 16;");
 
+        // value enums
         for op in &spv.operand_kinds {
-            match op.enumerants.as_ref()  {
-                Some(v) => {
-                    println!("\tenum class {} : unsigned\n\t{{", op.kind);
-                    for enumval in v {
-                        if op.kind == "Dim" && enumval.enumerant.len() == 2{
-                            print!("\t\tDim{} = ", enumval.enumerant);
-                        }else{
-                            print!("\t\t{} = ", enumval.enumerant);
+            if op.category == "ValueEnum" || op.category != "BitEnum" {
+                match op.enumerants.as_ref()  {
+                    Some(v) => {
+                        println!("\tenum class {} : unsigned\n\t{{", op.kind);
+                        for enumval in v {
+                            if op.kind == "Dim" && enumval.enumerant.len() == 2{
+                                print!("\t\tDim{} = ", enumval.enumerant);
+                            }else{
+                                print!("\t\t{} = ", enumval.enumerant);
+                            }
+                            match &enumval.value
+                            {
+                                serde_json::Value::Number(x) => {print!("{},\n", x)},
+                                serde_json::Value::String(s) => {print!("{},\n", s)}
+                                _ => {}
+                            }
                         }
-                        match &enumval.value
-                        {
-                            serde_json::Value::Number(x) => {print!("{},\n", x)},
-                            serde_json::Value::String(s) => {print!("{},\n", s)}
-                            _ => {}
-                        }
-                    }
-                    if op.category == "ValueEnum" {
                         println!("\t\tMax = 0x7fffffff");
-                    }
-                    println!("\t}};");    
-                },
-                None => {}
-            }          
+                        println!("\t}};");    
+                    },
+                    None => {}
+                }  
+            }
+            else if op.category == "BitEnum"
+            {
+                match op.enumerants.as_ref()  {
+                    Some(v) => {
+                        println!("\tenum class {}Mask : unsigned\n\t{{", op.kind);
+                        for enumval in v {
+                            if enumval.enumerant == "None"{
+                                print!("\t\tMask{} = ", enumval.enumerant);
+                            }else{
+                                print!("\t\t{} = ", enumval.enumerant);
+                            }
+                            match &enumval.value
+                            {
+                                serde_json::Value::Number(x) => {print!("{},\n", x)},
+                                serde_json::Value::String(s) => {print!("{},\n", s)}
+                                _ => {}
+                            }
+                        }
+                        println!("\t}};");
+
+                        println!("\tenum class {}Shift : unsigned\n\t{{", op.kind);
+                        let mut shift = 0;
+                        for enumval in v {
+                            println!("\t\t{} = {},", enumval.enumerant, shift); shift += 1
+                        }
+                        println!("\t\tMax = 0x7fffffff");
+                        println!("\t}};");   
+                    },
+                    None => {}
+                } 
+
+            }        
         }
 
         println!("\tenum class Op : unsigned\n\t{{");
