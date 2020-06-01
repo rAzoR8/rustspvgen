@@ -110,6 +110,9 @@ fn main() {
                             _ => {}
                         }
                     }
+                    if op.category == "ValueEnum" {
+                        println!("\t\tMax = 0x7fffffff");
+                    }
                     println!("\t}};");    
                 },
                 None => {}
@@ -121,6 +124,7 @@ fn main() {
         {
             println!("\t\t{} = {},", instr.opname, instr.opcode);
         }
+        println!("\t\tMax = 0x7fffffff");
         println!("\t}};");
 
         // HasResultAndType
