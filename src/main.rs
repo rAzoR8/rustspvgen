@@ -312,6 +312,7 @@ fn main() {
 
         println!("\tpublic:");
             println!("\t\tGrammar(IAllocator* _pAllocator);");
+            println!("\t\tconst Instruction* getInfo(spv::Op _opcode) const;");
         println!("\tprivate:");
             println!("\t\tHashMap<spv::Op, Instruction> m_instructions;");
         println!("}};");
@@ -331,23 +332,25 @@ fn main() {
         println!("Grammar::Grammar(IAllocator* _pAllocator) : m_instructions(_pAllocator)\n{{");
         for instr in spv.instructions
         {
+            let ver: u32 = match instr.version
             {
-                let ver: u32 = match instr.version
-                {
-                    Some(s) => {
-                        let vec: Vec<&str> = s.split(".").collect();
-                        if vec.len() == 2 {
-                            let major: u32 = vec.first().unwrap().to_string().parse().unwrap();
-                            let minor: u32 = vec.last().unwrap().to_string().parse().unwrap();
-                            (major << 16) | (minor << 8)
-                        }else {0} // fail case
-                    },
-                    None => 0
-                };
+                Some(s) => {
+                    let vec: Vec<&str> = s.split(".").collect();
+                    if vec.len() == 2 {
+                        let major: u32 = vec.first().unwrap().to_string().parse().unwrap();
+                        let minor: u32 = vec.last().unwrap().to_string().parse().unwrap();
+                        (major << 16) | (minor << 8)
+                    }else {0} // fail case
+                },
+                None => 0
+            };
 
-                println!("\tm_instructions.emplaceUnique(spv::Op::{}, Instruction{{\"{}\", spv::Op::{}, _pAllocator, _pAllocator, _pAllocator, {}}});", instr.opname, instr.opname, instr.opname, ver);
-            }
+            println!("\tm_instructions.emplaceUnique(spv::Op::{}, Instruction{{\"{}\", spv::Op::{}, _pAllocator, _pAllocator, _pAllocator, {}}});", instr.opname, instr.opname, instr.opname, ver);
         }
         println!("}};"); // constructor
+
+        println!("const Grammar::Instruction* Grammar::getInfo(spv::Op _opcode) const\n{{");
+            println!("\treturn m_instructions.get(_opcode);");
+        println!("}};"); // getInfo
     }
 }
