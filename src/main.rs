@@ -256,18 +256,16 @@ fn spv_defs(spv: Grammar)
             opcodes.insert(instr.opcode);
             match &instr.operands
             {
-                Some(ops) =>
-                {
-                    let mut res = false;
+                Some(ops) => {    
+                    let mut res = false;                
                     for operand in ops {
-                        if operand.kind == "IdResult" { res = true; break;}
+                        if operand.kind == "IdResult" {res = true; break;}
                     }
-                    if res == false {
-                        println!("\t\tcase Op::{}: return false;", instr.opname);
-                    }
+                    if res == false {println!("\t\tcase Op::{}: return false;", instr.opname);  }
                 }
-                None => {}
-            }            
+                None => { println!("\t\tcase Op::{}: return false;", instr.opname);  }
+            } 
+                   
         }
 
         println!("\t\t}}");
@@ -286,10 +284,8 @@ fn spv_defs(spv: Grammar)
         {
             if opcodes.contains(&instr.opcode) { continue; }
             opcodes.insert(instr.opcode);
-            match &instr.operands
-            {
-                Some(ops) =>
-                {
+            match &instr.operands {
+                Some(ops) => {
                     let mut res = false;
                     for operand in ops {
                         if operand.kind == "IdResultType" { res = true; break;}
@@ -298,8 +294,71 @@ fn spv_defs(spv: Grammar)
                         println!("\t\tcase Op::{}: return false;", instr.opname);
                     }
                 }
-                None => {}
+                None => {println!("\t\tcase Op::{}: return false;", instr.opname);}
             }            
+        }
+
+        println!("\t\t}}");
+        println!("\t}}");
+    }
+
+    // IsTypeOp
+    {
+        println!("\tinline constexpr bool IsTypeOp(Op opcode) {{");
+        println!("\t\tswitch (opcode) {{");
+        println!("\t\tdefault: return false; // majority of instructions are not types");
+
+        let mut opcodes = HashSet::new();        
+
+        for instr in &spv.instructions
+        {
+            if instr.opname.starts_with("OpType") {
+                if opcodes.contains(&instr.opcode) { continue; }
+                opcodes.insert(instr.opcode);
+                println!("\t\tcase Op::{}: return true;", instr.opname);
+            }
+        }
+
+        println!("\t\t}}");
+        println!("\t}}");
+    }
+
+    // IsConstantOp
+    {
+        println!("\tinline constexpr bool IsConstantOp(Op opcode) {{");
+        println!("\t\tswitch (opcode) {{");
+        println!("\t\tdefault: return false; // majority of instructions are not constants");
+
+        let mut opcodes = HashSet::new();        
+
+        for instr in &spv.instructions
+        {
+            if instr.opname.starts_with("OpConstant") {
+                if opcodes.contains(&instr.opcode) { continue; }
+                opcodes.insert(instr.opcode);
+                println!("\t\tcase Op::{}: return true;", instr.opname);
+            }
+        }
+
+        println!("\t\t}}");
+        println!("\t}}");
+    }
+
+    // IsSpecConstantOp
+    {
+        println!("\tinline constexpr bool IsSpecConstantOp(Op opcode) {{");
+        println!("\t\tswitch (opcode) {{");
+        println!("\t\tdefault: return false; // majority of instructions are not spec constants");
+
+        let mut opcodes = HashSet::new();        
+
+        for instr in &spv.instructions
+        {
+            if instr.opname.starts_with("OpSpecConstant") {
+                if opcodes.contains(&instr.opcode) { continue; }
+                opcodes.insert(instr.opcode);
+                println!("\t\tcase Op::{}: return true;", instr.opname);
+            }
         }
 
         println!("\t\t}}");
