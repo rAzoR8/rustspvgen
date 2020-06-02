@@ -12,19 +12,20 @@ use std::collections::HashMap;
 #[derive(Deserialize)]
 struct Grammar {
     copyright: Vec<String>,
-    magic_number: String,
-    major_version: u32,
-    minor_version: u32,
-    revision: u32,
-    instructions: Vec<Instruction>,
-    operand_kinds: Option<Vec<OperandKinds>>
+    magic_number: Option<String>, // spv
+    major_version: Option<u32>, // spv
+    minor_version: Option<u32>, // spv
+    version: Option<u32>, // glsl & opencl
+    revision: u32, // both
+    instructions: Vec<Instruction>, // both
+    operand_kinds: Option<Vec<OperandKinds>> // spv
 }
 
 #[derive(Deserialize)]
 struct Instruction
 {
     opname: String,
-    class: String,
+    class: Option<String>,
     opcode: u32,
     operands: Option<Vec<Operand>>,
     capabilities: Option<Vec<String>>,
@@ -75,8 +76,8 @@ fn spv_defs(spv: Grammar)
     println!("namespace spvgentwo::spv\n{{");
 
     println!("\tusing Id = unsigned int;");
-    println!("\tstatic constexpr unsigned int MagicNumber = {};", spv.magic_number);
-    let version: u32 = spv.major_version << 16 | spv.minor_version << 8;
+    println!("\tstatic constexpr unsigned int MagicNumber = {};", spv.magic_number.unwrap_or("0x07230203".to_string()));
+    let version: u32 = spv.major_version.unwrap_or_default() << 16 | spv.minor_version.unwrap_or_default() << 8;
     println!("\tstatic constexpr unsigned int Version = {};", version);
     println!("\tstatic constexpr unsigned int Revision = {};", spv.revision);
     println!("\tstatic constexpr unsigned int OpCodeMask = 0xffff;");
@@ -349,12 +350,45 @@ fn spv_cpp(spv: Grammar)
     println!("const Grammar::Instruction* Grammar::getInfo(spv::Op _opcode) const\n{{");
         println!("\treturn m_instructions.get(_opcode);");
     println!("}};"); // getInfo
+}
 
+#[derive(Debug)]
+enum Extension
+{
+    GLSL,
+    OpenCL
+}
+
+fn ext_defs(spv: Grammar, ext: Extension)
+{
+    for line in spv.copyright {
+        println!("// {}", line); 
+    }
+
+    println!("#pragma once\n");
+    println!("namespace spvgentwo::{:?}\n{{", ext);
+
+    println!("\tstatic constexpr unsigned int Version = {};", spv.version.unwrap_or_default());
+    println!("\tstatic constexpr unsigned int Revision = {};", spv.revision);
+
+    println!("\tenum class Op : unsigned\n\t{{");
+    for instr in &spv.instructions
+    {
+        println!("\t\t{} = {},", instr.opname, instr.opcode);
+    }
+    println!("\t\tMax = 0x7fffffff");
+    println!("\t}};");
+
+    println!("}} // spvgentwo::{:?}", ext);
 }
 
 fn main() {
     let args: Vec<String> = env::args().collect();
     let file = File::open(&args[1]).expect("file should open read only");
+
+    let spirv_core = args[1].contains("spirv.core");
+    let exinst_glsl = args[1].contains("extinst.glsl");
+    let exinst_opencl = args[1].contains("extinst.opencl");
 
     let defs = args.len() > 2 && args[2] == "--defs";
     let header = args.len() > 2 && args[2] == "--header";
@@ -363,16 +397,23 @@ fn main() {
 
     println!("// Auto generated - do not modify");
 
-    if defs
-    {
-        spv_defs(spv);        
-    }    
-    else if header
-    {
-       spv_header(spv);
-    }
-    else if cpp // cpp
-    {
-        spv_cpp(spv);
+    if spirv_core {
+        if defs {
+            spv_defs(spv);        
+        }    
+        else if header {
+            spv_header(spv);
+        }
+        else if cpp {
+            spv_cpp(spv);
+        }
+    } else if exinst_glsl {
+        if defs {
+            ext_defs(spv, Extension::GLSL);        
+        } 
+    } else if exinst_opencl {
+        if defs {
+            ext_defs(spv, Extension::OpenCL);        
+        } 
     }
 }
