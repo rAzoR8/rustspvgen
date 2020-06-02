@@ -63,6 +63,295 @@ struct Parameter
     kind: String
 }
 
+fn spv_defs(spv: Grammar)
+{
+    let operand_kinds = spv.operand_kinds.unwrap_or(Vec::new());
+
+    for line in spv.copyright {
+        println!("// {}", line); 
+    }
+
+    println!("#pragma once\n");
+    println!("namespace spvgentwo::spv\n{{");
+
+    println!("\tusing Id = unsigned int;");
+    println!("\tstatic constexpr unsigned int MagicNumber = {};", spv.magic_number);
+    let version: u32 = spv.major_version << 16 | spv.minor_version << 8;
+    println!("\tstatic constexpr unsigned int Version = {};", version);
+    println!("\tstatic constexpr unsigned int Revision = {};", spv.revision);
+    println!("\tstatic constexpr unsigned int OpCodeMask = 0xffff;");
+    println!("\tstatic constexpr unsigned int WordCountShift = 16;");
+
+    // value enums
+    for op in &operand_kinds {
+        if op.category == "ValueEnum" || op.category != "BitEnum" {
+            match op.enumerants.as_ref()  {
+                Some(v) => {
+                    println!("\tenum class {} : unsigned\n\t{{", op.kind);
+                    for enumval in v {
+                        if op.kind == "Dim" && enumval.enumerant.len() == 2{
+                            print!("\t\tDim{} = ", enumval.enumerant);
+                        }else{
+                            print!("\t\t{} = ", enumval.enumerant);
+                        }
+                        match &enumval.value
+                        {
+                            serde_json::Value::Number(x) => {print!("{},\n", x)},
+                            serde_json::Value::String(s) => {print!("{},\n", s)}
+                            _ => {}
+                        }
+                    }
+                    println!("\t\tMax = 0x7fffffff");
+                    println!("\t}};");    
+                },
+                None => {}
+            }  
+        }
+        else if op.category == "BitEnum"
+        {
+            match op.enumerants.as_ref()  {
+                Some(v) => {
+                    println!("\tenum class {}Mask : unsigned\n\t{{", op.kind);
+                    for enumval in v {
+                        if enumval.enumerant == "None"{
+                            print!("\t\tMask{} = ", enumval.enumerant);
+                        }else{
+                            print!("\t\t{} = ", enumval.enumerant);
+                        }
+                        match &enumval.value
+                        {
+                            serde_json::Value::Number(x) => {print!("{},\n", x)},
+                            serde_json::Value::String(s) => {print!("{},\n", s)}
+                            _ => {}
+                        }
+                    }
+                    println!("\t}};");
+
+                    println!("\tenum class {}Shift : unsigned\n\t{{", op.kind);
+                    let mut shift = 0;
+                    for enumval in v {
+                        println!("\t\t{} = {},", enumval.enumerant, shift); shift += 1
+                    }
+                    println!("\t\tMax = 0x7fffffff");
+                    println!("\t}};");   
+                },
+                None => {}
+            } 
+
+        }        
+    }
+
+    println!("\tenum class Op : unsigned\n\t{{");
+    for instr in &spv.instructions
+    {
+        println!("\t\t{} = {},", instr.opname, instr.opcode);
+    }
+    println!("\t\tMax = 0x7fffffff");
+    println!("\t}};");
+
+    // HasResultAndType
+    {
+        println!("\tinline void HasResultAndType(Op opcode, bool *hasResult, bool *hasResultType) {{");
+        println!("\t\t*hasResult = *hasResultType = false;");
+        println!("\t\tswitch (opcode) {{");
+        println!("\t\tdefault: /* unknown opcode */ break;");
+
+        let mut opcodes = HashSet::new();
+        for instr in &spv.instructions
+        {
+            if opcodes.contains(&instr.opcode) { continue; }
+            opcodes.insert(instr.opcode);
+
+            match &instr.operands
+            {
+                Some(ops) =>
+                {
+                    let mut res_type = false;
+                    let mut res = false;
+                    for operand in ops {
+                        if operand.kind == "IdResultType" { res_type = true;}
+                        if operand.kind == "IdResult" { res = true;}
+                        if res && res_type {break;}
+                    }
+                    if res || res_type {
+                        println!("\t\tcase Op::{}: *hasResult = {}; *hasResultType = {}; break;", instr.opname, res, res_type);
+                    }
+                }
+                None => {}
+            }            
+        }
+
+        println!("\t\t}}");
+        println!("\t}}");
+    }
+
+    // HasResult
+    {
+        println!("\tinline constexpr bool HasResult(Op opcode) {{");
+        println!("\t\tswitch (opcode) {{");
+        println!("\t\tdefault: return true; // majority of instructions has a result");
+
+        let mut opcodes = HashSet::new();        
+
+        for instr in &spv.instructions
+        {
+            if opcodes.contains(&instr.opcode) { continue; }
+            opcodes.insert(instr.opcode);
+            match &instr.operands
+            {
+                Some(ops) =>
+                {
+                    let mut res = false;
+                    for operand in ops {
+                        if operand.kind == "IdResult" { res = true; break;}
+                    }
+                    if res == false {
+                        println!("\t\tcase Op::{}: return false;", instr.opname);
+                    }
+                }
+                None => {}
+            }            
+        }
+
+        println!("\t\t}}");
+        println!("\t}}");
+    }
+
+    // HasResultType
+    {
+        println!("\tinline constexpr bool HasResultType(Op opcode) {{");
+        println!("\t\tswitch (opcode) {{");
+        println!("\t\tdefault: return true; // majority of instructions has a result type");
+
+        let mut opcodes = HashSet::new();        
+
+        for instr in &spv.instructions
+        {
+            if opcodes.contains(&instr.opcode) { continue; }
+            opcodes.insert(instr.opcode);
+            match &instr.operands
+            {
+                Some(ops) =>
+                {
+                    let mut res = false;
+                    for operand in ops {
+                        if operand.kind == "IdResultType" { res = true; break;}
+                    }
+                    if res == false {
+                        println!("\t\tcase Op::{}: return false;", instr.opname);
+                    }
+                }
+                None => {}
+            }            
+        }
+
+        println!("\t\t}}");
+        println!("\t}}");
+    }
+
+    println!("}} // spvgentwo::spv");
+}
+
+fn spv_header(spv: Grammar)
+{
+    let operand_kinds = spv.operand_kinds.unwrap_or(Vec::new());
+
+    println!("#pragma once\n");
+
+    println!("#include \"Vector.h\"");
+    println!("#include \"HashMap.h\"");
+    println!("#include \"Spv.h\"\n");
+
+    println!("namespace spvgentwo\n{{");
+
+    println!("class Grammar\n{{");
+
+        let mut categories = HashSet::new();
+        println!("\tenum class OperandCategory : unsigned short\n\t{{");
+        for elem in &operand_kinds {
+            if !categories.contains(&elem.category)
+            {
+                categories.insert(&elem.category);
+                println!("\t\t{},",elem.category);
+            }
+        }
+        println!("\t}};");
+
+        println!("\tenum class OperandKind : unsigned short\n\t{{");
+        for elem in &operand_kinds {
+            println!("\t\t{},",elem.kind);
+        }
+        println!("\t}};");
+
+        println!("\tenum class Quantifier\n\t{{");
+            println!("\t\tOptional,");
+            println!("\t\tAnyCount");   
+        println!("\t}};");
+
+        println!("\tstruct Operand\n\t{{");
+            println!("\t\tOperandKind kind;");
+            println!("\t\tOperandCategory category;");        
+            println!("\t\tconst char* name;");
+            println!("\t\tQuantifier quantifier;");
+        println!("\t}};");
+
+        println!("\tstruct Instruction\n\t{{");
+            println!("\t\tconst char* name;");
+            println!("\t\tspv::Op opcode;");
+            println!("\t\tVector<Operand> operands;");
+            println!("\t\tVector<spv::Capability> capabilities;");
+            println!("\t\tVector<const char*> extensions;");
+            println!("\t\tunsigned int version;");
+        println!("\t}};");
+
+    println!("\tpublic:");
+        println!("\t\tGrammar(IAllocator* _pAllocator);");
+        println!("\t\tconst Instruction* getInfo(spv::Op _opcode) const;");
+    println!("\tprivate:");
+        println!("\t\tHashMap<spv::Op, Instruction> m_instructions;");
+    println!("}};");
+
+    println!("}} // spvgentwo"); // namespace
+}
+
+fn spv_cpp(spv: Grammar)
+{
+    let operand_kinds = spv.operand_kinds.unwrap_or(Vec::new());
+
+    println!("#include \"spvgentwo/Grammar.h\"\n");
+    println!("using namespace spvgentwo;\n");
+
+    let mut kinds = HashMap::new();
+    for elem in &operand_kinds {
+        kinds.insert(&elem.kind, &elem.category);
+    }
+
+    println!("Grammar::Grammar(IAllocator* _pAllocator) : m_instructions(_pAllocator)\n{{");
+    for instr in spv.instructions
+    {
+        let ver: u32 = match instr.version
+        {
+            Some(s) => {
+                let vec: Vec<&str> = s.split(".").collect();
+                if vec.len() == 2 {
+                    let major: u32 = vec.first().unwrap().to_string().parse().unwrap();
+                    let minor: u32 = vec.last().unwrap().to_string().parse().unwrap();
+                    (major << 16) | (minor << 8)
+                }else {0} // fail case
+            },
+            None => 0
+        };
+
+        println!("\tm_instructions.emplaceUnique(spv::Op::{}, Instruction{{\"{}\", spv::Op::{}, _pAllocator, _pAllocator, _pAllocator, {}}});", instr.opname, instr.opname, instr.opname, ver);
+    }
+    println!("}};"); // constructor
+
+    println!("const Grammar::Instruction* Grammar::getInfo(spv::Op _opcode) const\n{{");
+        println!("\treturn m_instructions.get(_opcode);");
+    println!("}};"); // getInfo
+
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     let file = File::open(&args[1]).expect("file should open read only");
@@ -70,289 +359,20 @@ fn main() {
     let defs = args.len() > 2 && args[2] == "--defs";
     let header = args.len() > 2 && args[2] == "--header";
     let cpp = args.len() > 2 && args[2] == "--cpp";
-    let spv: Grammar = serde_json::from_reader(file).expect("file should be proper JSON");
-
-    let operand_kinds = spv.operand_kinds.unwrap_or(Vec::new());
+    let spv: Grammar = serde_json::from_reader(file).expect("file should be proper JSON");    
 
     println!("// Auto generated - do not modify");
 
     if defs
     {
-        for line in spv.copyright {
-            println!("// {}", line); 
-        }
-
-        println!("#pragma once\n");
-        println!("namespace spvgentwo::spv\n{{");
-
-        println!("\tusing Id = unsigned int;");
-        println!("\tstatic constexpr unsigned int MagicNumber = {};", spv.magic_number);
-        let version: u32 = spv.major_version << 16 | spv.minor_version << 8;
-        println!("\tstatic constexpr unsigned int Version = {};", version);
-        println!("\tstatic constexpr unsigned int Revision = {};", spv.revision);
-        println!("\tstatic constexpr unsigned int OpCodeMask = 0xffff;");
-        println!("\tstatic constexpr unsigned int WordCountShift = 16;");
-
-        // value enums
-        for op in operand_kinds {
-            if op.category == "ValueEnum" || op.category != "BitEnum" {
-                match op.enumerants.as_ref()  {
-                    Some(v) => {
-                        println!("\tenum class {} : unsigned\n\t{{", op.kind);
-                        for enumval in v {
-                            if op.kind == "Dim" && enumval.enumerant.len() == 2{
-                                print!("\t\tDim{} = ", enumval.enumerant);
-                            }else{
-                                print!("\t\t{} = ", enumval.enumerant);
-                            }
-                            match &enumval.value
-                            {
-                                serde_json::Value::Number(x) => {print!("{},\n", x)},
-                                serde_json::Value::String(s) => {print!("{},\n", s)}
-                                _ => {}
-                            }
-                        }
-                        println!("\t\tMax = 0x7fffffff");
-                        println!("\t}};");    
-                    },
-                    None => {}
-                }  
-            }
-            else if op.category == "BitEnum"
-            {
-                match op.enumerants.as_ref()  {
-                    Some(v) => {
-                        println!("\tenum class {}Mask : unsigned\n\t{{", op.kind);
-                        for enumval in v {
-                            if enumval.enumerant == "None"{
-                                print!("\t\tMask{} = ", enumval.enumerant);
-                            }else{
-                                print!("\t\t{} = ", enumval.enumerant);
-                            }
-                            match &enumval.value
-                            {
-                                serde_json::Value::Number(x) => {print!("{},\n", x)},
-                                serde_json::Value::String(s) => {print!("{},\n", s)}
-                                _ => {}
-                            }
-                        }
-                        println!("\t}};");
-
-                        println!("\tenum class {}Shift : unsigned\n\t{{", op.kind);
-                        let mut shift = 0;
-                        for enumval in v {
-                            println!("\t\t{} = {},", enumval.enumerant, shift); shift += 1
-                        }
-                        println!("\t\tMax = 0x7fffffff");
-                        println!("\t}};");   
-                    },
-                    None => {}
-                } 
-
-            }        
-        }
-
-        println!("\tenum class Op : unsigned\n\t{{");
-        for instr in &spv.instructions
-        {
-            println!("\t\t{} = {},", instr.opname, instr.opcode);
-        }
-        println!("\t\tMax = 0x7fffffff");
-        println!("\t}};");
-
-        // HasResultAndType
-        {
-            println!("\tinline void HasResultAndType(Op opcode, bool *hasResult, bool *hasResultType) {{");
-            println!("\t\t*hasResult = *hasResultType = false;");
-            println!("\t\tswitch (opcode) {{");
-            println!("\t\tdefault: /* unknown opcode */ break;");
-
-            let mut opcodes = HashSet::new();
-            for instr in &spv.instructions
-            {
-                if opcodes.contains(&instr.opcode) { continue; }
-                opcodes.insert(instr.opcode);
-
-                match &instr.operands
-                {
-                    Some(ops) =>
-                    {
-                        let mut res_type = false;
-                        let mut res = false;
-                        for operand in ops {
-                            if operand.kind == "IdResultType" { res_type = true;}
-                            if operand.kind == "IdResult" { res = true;}
-                            if res && res_type {break;}
-                        }
-                        if res || res_type {
-                            println!("\t\tcase Op::{}: *hasResult = {}; *hasResultType = {}; break;", instr.opname, res, res_type);
-                        }
-                    }
-                    None => {}
-                }            
-            }
-
-            println!("\t\t}}");
-            println!("\t}}");
-        }
-
-        // HasResult
-        {
-            println!("\tinline constexpr bool HasResult(Op opcode) {{");
-            println!("\t\tswitch (opcode) {{");
-            println!("\t\tdefault: return true; // majority of instructions has a result");
-
-            let mut opcodes = HashSet::new();        
-
-            for instr in &spv.instructions
-            {
-                if opcodes.contains(&instr.opcode) { continue; }
-                opcodes.insert(instr.opcode);
-                match &instr.operands
-                {
-                    Some(ops) =>
-                    {
-                        let mut res = false;
-                        for operand in ops {
-                            if operand.kind == "IdResult" { res = true; break;}
-                        }
-                        if res == false {
-                            println!("\t\tcase Op::{}: return false;", instr.opname);
-                        }
-                    }
-                    None => {}
-                }            
-            }
-
-            println!("\t\t}}");
-            println!("\t}}");
-        }
-
-        // HasResultType
-        {
-            println!("\tinline constexpr bool HasResultType(Op opcode) {{");
-            println!("\t\tswitch (opcode) {{");
-            println!("\t\tdefault: return true; // majority of instructions has a result type");
-
-            let mut opcodes = HashSet::new();        
-
-            for instr in &spv.instructions
-            {
-                if opcodes.contains(&instr.opcode) { continue; }
-                opcodes.insert(instr.opcode);
-                match &instr.operands
-                {
-                    Some(ops) =>
-                    {
-                        let mut res = false;
-                        for operand in ops {
-                            if operand.kind == "IdResultType" { res = true; break;}
-                        }
-                        if res == false {
-                            println!("\t\tcase Op::{}: return false;", instr.opname);
-                        }
-                    }
-                    None => {}
-                }            
-            }
-
-            println!("\t\t}}");
-            println!("\t}}");
-        }
-
-        println!("}} // spvgentwo::spv");
+        spv_defs(spv);        
     }    
     else if header
     {
-        println!("#pragma once\n");
-
-        println!("#include \"Vector.h\"");
-        println!("#include \"HashMap.h\"");
-        println!("#include \"Spv.h\"\n");
-
-        println!("namespace spvgentwo\n{{");
-
-        println!("class Grammar\n{{");
-
-            let mut categories = HashSet::new();
-            println!("\tenum class OperandCategory : unsigned short\n\t{{");
-            for elem in &operand_kinds {
-                if !categories.contains(&elem.category)
-                {
-                    categories.insert(&elem.category);
-                    println!("\t\t{},",elem.category);
-                }
-            }
-            println!("\t}};");
-
-            println!("\tenum class OperandKind : unsigned short\n\t{{");
-            for elem in &operand_kinds {
-                println!("\t\t{},",elem.kind);
-            }
-            println!("\t}};");
-
-            println!("\tenum class Quantifier\n\t{{");
-                println!("\t\tOptional,");
-                println!("\t\tAnyCount");   
-            println!("\t}};");
-
-            println!("\tstruct Operand\n\t{{");
-                println!("\t\tOperandKind kind;");
-                println!("\t\tOperandCategory category;");        
-                println!("\t\tconst char* name;");
-                println!("\t\tQuantifier quantifier;");
-            println!("\t}};");
-
-            println!("\tstruct Instruction\n\t{{");
-                println!("\t\tconst char* name;");
-                println!("\t\tspv::Op opcode;");
-                println!("\t\tVector<Operand> operands;");
-                println!("\t\tVector<spv::Capability> capabilities;");
-                println!("\t\tVector<const char*> extensions;");
-                println!("\t\tunsigned int version;");
-            println!("\t}};");
-
-        println!("\tpublic:");
-            println!("\t\tGrammar(IAllocator* _pAllocator);");
-            println!("\t\tconst Instruction* getInfo(spv::Op _opcode) const;");
-        println!("\tprivate:");
-            println!("\t\tHashMap<spv::Op, Instruction> m_instructions;");
-        println!("}};");
-
-        println!("}} // spvgentwo"); // namespace
+       spv_header(spv);
     }
     else if cpp // cpp
     {
-        println!("#include \"spvgentwo/Grammar.h\"\n");
-        println!("using namespace spvgentwo;\n");
-
-        let mut kinds = HashMap::new();
-        for elem in &operand_kinds {
-            kinds.insert(&elem.kind, &elem.category);
-        }
-
-        println!("Grammar::Grammar(IAllocator* _pAllocator) : m_instructions(_pAllocator)\n{{");
-        for instr in spv.instructions
-        {
-            let ver: u32 = match instr.version
-            {
-                Some(s) => {
-                    let vec: Vec<&str> = s.split(".").collect();
-                    if vec.len() == 2 {
-                        let major: u32 = vec.first().unwrap().to_string().parse().unwrap();
-                        let minor: u32 = vec.last().unwrap().to_string().parse().unwrap();
-                        (major << 16) | (minor << 8)
-                    }else {0} // fail case
-                },
-                None => 0
-            };
-
-            println!("\tm_instructions.emplaceUnique(spv::Op::{}, Instruction{{\"{}\", spv::Op::{}, _pAllocator, _pAllocator, _pAllocator, {}}});", instr.opname, instr.opname, instr.opname, ver);
-        }
-        println!("}};"); // constructor
-
-        println!("const Grammar::Instruction* Grammar::getInfo(spv::Op _opcode) const\n{{");
-            println!("\treturn m_instructions.get(_opcode);");
-        println!("}};"); // getInfo
+        spv_cpp(spv);
     }
 }
