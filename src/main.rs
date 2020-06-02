@@ -17,7 +17,7 @@ struct Grammar {
     minor_version: u32,
     revision: u32,
     instructions: Vec<Instruction>,
-    operand_kinds: Vec<OperandKinds>
+    operand_kinds: Option<Vec<OperandKinds>>
 }
 
 #[derive(Deserialize)]
@@ -72,6 +72,8 @@ fn main() {
     let cpp = args.len() > 2 && args[2] == "--cpp";
     let spv: Grammar = serde_json::from_reader(file).expect("file should be proper JSON");
 
+    let operand_kinds = spv.operand_kinds.unwrap_or(Vec::new());
+
     println!("// Auto generated - do not modify");
 
     if defs
@@ -92,7 +94,7 @@ fn main() {
         println!("\tstatic constexpr unsigned int WordCountShift = 16;");
 
         // value enums
-        for op in &spv.operand_kinds {
+        for op in operand_kinds {
             if op.category == "ValueEnum" || op.category != "BitEnum" {
                 match op.enumerants.as_ref()  {
                     Some(v) => {
@@ -274,7 +276,7 @@ fn main() {
 
             let mut categories = HashSet::new();
             println!("\tenum class OperandCategory : unsigned short\n\t{{");
-            for elem in &spv.operand_kinds {
+            for elem in &operand_kinds {
                 if !categories.contains(&elem.category)
                 {
                     categories.insert(&elem.category);
@@ -284,7 +286,7 @@ fn main() {
             println!("\t}};");
 
             println!("\tenum class OperandKind : unsigned short\n\t{{");
-            for elem in &spv.operand_kinds {
+            for elem in &operand_kinds {
                 println!("\t\t{},",elem.kind);
             }
             println!("\t}};");
@@ -325,7 +327,7 @@ fn main() {
         println!("using namespace spvgentwo;\n");
 
         let mut kinds = HashMap::new();
-        for elem in &spv.operand_kinds {
+        for elem in &operand_kinds {
             kinds.insert(&elem.kind, &elem.category);
         }
 
