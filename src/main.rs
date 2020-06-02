@@ -9,6 +9,13 @@ use serde_derive::Deserialize;
 use std::collections::HashSet;
 use std::collections::HashMap;
 
+#[derive(Debug)]
+enum Extension
+{
+    glsl,
+    opencl
+}
+
 #[derive(Deserialize)]
 struct Grammar {
     copyright: Vec<String>,
@@ -83,6 +90,26 @@ fn spv_defs(spv: Grammar)
     println!("\tstatic constexpr unsigned int OpCodeMask = 0xffff;");
     println!("\tstatic constexpr unsigned int WordCountShift = 16;");
 
+    let mut extensions = HashSet::new();
+
+    // scann for extensions
+    for op in &operand_kinds {
+        match op.enumerants.as_ref()  {
+            Some(v) => {
+                for enumval in v {                    
+                    for ext in enumval.extensions.as_ref() {
+                        for e in ext {
+                            if extensions.contains(e) == false{
+                                extensions.insert(e);
+                            }
+                        }
+                    }
+                } 
+            },
+            None => {}
+        }  
+    }
+
     // value enums
     for op in &operand_kinds {
         if op.category == "ValueEnum" || op.category != "BitEnum" {
@@ -142,12 +169,41 @@ fn spv_defs(spv: Grammar)
         }        
     }
 
+    // opcode enum
     println!("\tenum class Op : unsigned\n\t{{");
     for instr in &spv.instructions
     {
         println!("\t\t{} = {},", instr.opname, instr.opcode);
+
+        for ext in instr.extensions.as_ref(){
+            for e in ext{
+                if extensions.contains(e) == false{
+                    extensions.insert(e);
+                }
+            }
+        }
     }
     println!("\t\tMax = 0x7fffffff");
+    println!("\t}};");
+
+    // extensions enum
+    {
+        println!("\tenum class Extensions : unsigned\n\t{{");
+        let mut i = 0;
+        for ext in &extensions
+        {
+            println!("\t\t{} = {},", ext, i); i += 1;
+        }
+        println!("\t\tMax = 0x7fffffff");
+        println!("\t}};");
+    }
+
+    // extension names array
+    println!("\tstatic constexpr const char* ExtensionNames[] =\n\t{{");
+    for ext in &extensions
+    {
+        println!("\t\t\"{}\",", ext);
+    }
     println!("\t}};");
 
     // HasResultAndType
@@ -352,13 +408,6 @@ fn spv_cpp(spv: Grammar)
     println!("}};"); // getInfo
 }
 
-#[derive(Debug)]
-enum Extension
-{
-    GLSL,
-    OpenCL
-}
-
 fn ext_defs(spv: Grammar, ext: Extension)
 {
     for line in spv.copyright {
@@ -409,11 +458,11 @@ fn main() {
         }
     } else if exinst_glsl {
         if defs {
-            ext_defs(spv, Extension::GLSL);        
+            ext_defs(spv, Extension::glsl);        
         } 
     } else if exinst_opencl {
         if defs {
-            ext_defs(spv, Extension::OpenCL);        
+            ext_defs(spv, Extension::opencl);        
         } 
     }
 }
