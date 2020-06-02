@@ -12,8 +12,8 @@ use std::collections::HashMap;
 #[derive(Debug)]
 enum Extension
 {
-    glsl,
-    opencl
+    glslstd450,
+    opencl100
 }
 
 #[derive(Deserialize)]
@@ -495,8 +495,8 @@ fn main() {
     let file = File::open(&args[1]).expect("file should open read only");
 
     let spirv_core = args[1].contains("spirv.core");
-    let exinst_glsl = args[1].contains("extinst.glsl");
-    let exinst_opencl = args[1].contains("extinst.opencl");
+    let exinst_glsl = args[1].contains("extinst.glsl.std.450");
+    let exinst_opencl = args[1].contains("extinst.opencl.std.100");
 
     let defs = args.len() > 2 && args[2] == "--defs";
     let header = args.len() > 2 && args[2] == "--header";
@@ -517,11 +517,11 @@ fn main() {
         }
     } else if exinst_glsl {
         if defs {
-            ext_defs(spv, Extension::glsl);        
+            ext_defs(spv, Extension::glslstd450);        
         } 
     } else if exinst_opencl {
         if defs {
-            ext_defs(spv, Extension::opencl);        
+            ext_defs(spv, Extension::opencl100);        
         } 
     }
 }
