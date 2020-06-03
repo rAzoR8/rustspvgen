@@ -505,36 +505,42 @@ fn ext_defs(spv: Grammar, ext: Extension)
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    let file = File::open(&args[1]).expect("file should open read only");
 
-    let spirv_core = args[1].contains("spirv.core");
-    let exinst_glsl = args[1].contains("extinst.glsl.std.450");
-    let exinst_opencl = args[1].contains("extinst.opencl.std.100");
+    let mut spv: Option<Grammar> = None;
+    let mut glsl: Option<Grammar> = None;
+    let mut opencl: Option<Grammar> = None;
 
-    let defs = args.len() > 2 && args[2] == "--defs";
-    let header = args.len() > 2 && args[2] == "--header";
-    let cpp = args.len() > 2 && args[2] == "--cpp";
-    let spv: Grammar = serde_json::from_reader(file).expect("file should be proper JSON");    
+    let mut defs = false;
+    let mut header = false;
+    let mut cpp = false;
 
+    for arg in args
+    {
+        if arg.ends_with("spirv.core.grammar.json") {
+            spv = serde_json::from_reader(File::open(arg).expect("file should open read only")).expect("file should be proper JSON");
+        } else if arg.ends_with("extinst.glsl.std.450.grammar.json") {
+            glsl = serde_json::from_reader(File::open(arg).expect("file should open read only")).expect("file should be proper JSON"); 
+        } else if arg.ends_with("extinst.opencl.std.100.grammar.json") {
+            opencl = serde_json::from_reader(File::open(arg).expect("file should open read only")).expect("file should be proper JSON"); 
+        } else if arg == "--defs" {
+            defs = true;
+        } else if arg == "--header" {
+            header = true;
+        } else if arg == "--cpp" {
+            cpp = true;
+        }
+    }
     println!("// Auto generated - do not modify");
 
-    if spirv_core {
-        if defs {
-            spv_defs(spv);        
-        }    
-        else if header {
-            spv_header(spv);
-        }
-        else if cpp {
-            spv_cpp(spv);
-        }
-    } else if exinst_glsl {
-        if defs {
-            ext_defs(spv, Extension::glslstd450);        
-        } 
-    } else if exinst_opencl {
-        if defs {
-            ext_defs(spv, Extension::opencl100);        
-        } 
+    if defs {
+        if spv.is_some() { spv_defs(spv.unwrap()); } else
+        if glsl.is_some() { ext_defs(glsl.unwrap(), Extension::glslstd450); } else
+        if opencl.is_some() { ext_defs(opencl.unwrap(), Extension::opencl100); } 
+    }    
+    else if header && spv.is_some() {
+        spv_header(spv.unwrap());
+    }
+    else if cpp && spv.is_some() /*&& glsl.is_some() && opencl.is_some()*/ {
+        spv_cpp(spv.unwrap());
     }
 }
