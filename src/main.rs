@@ -370,7 +370,7 @@ fn spv_defs(spv: Grammar)
     println!("}} // spvgentwo::spv");
 }
 
-fn spv_header(spv: Grammar)
+fn grammar_header(spv: Grammar)
 {
     let operand_kinds = spv.operand_kinds.unwrap_or(Vec::new());
 
@@ -432,11 +432,13 @@ fn spv_header(spv: Grammar)
     println!("}} // spvgentwo"); // namespace
 }
 
-fn spv_cpp(spv: Grammar)
+fn grammar_cpp(spv: Grammar, glsl: Grammar, opencl: Grammar)
 {
     let operand_kinds = spv.operand_kinds.unwrap_or(Vec::new());
 
     println!("#include \"spvgentwo/Grammar.h\"\n");
+    println!("#include \"spvgentwo/Glsl.h\"\n");
+    println!("#include \"spvgentwo/OpenCl.h\"\n");
     println!("using namespace spvgentwo;\n");
 
     // let mut kinds = HashMap::new();
@@ -538,9 +540,9 @@ fn main() {
         if opencl.is_some() { ext_defs(opencl.unwrap(), Extension::opencl100); } 
     }    
     else if header && spv.is_some() {
-        spv_header(spv.unwrap());
+        grammar_header(spv.unwrap());
     }
-    else if cpp && spv.is_some() /*&& glsl.is_some() && opencl.is_some()*/ {
-        spv_cpp(spv.unwrap());
+    else if cpp && spv.is_some() && glsl.is_some() && opencl.is_some() {
+        grammar_cpp(spv.unwrap(), glsl.unwrap(), opencl.unwrap());
     }
 }
