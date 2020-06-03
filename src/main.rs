@@ -424,9 +424,9 @@ fn spv_header(spv: Grammar)
 
     println!("\tpublic:");
         println!("\t\tGrammar(IAllocator* _pAllocator);");
-        println!("\t\tconst Instruction* getInfo(spv::Op _opcode) const;");
+        println!("\t\tconst Instruction* getInfo(unsigned int _opcode) const;");
     println!("\tprivate:");
-        println!("\t\tHashMap<spv::Op, Instruction> m_instructions;");
+        println!("\t\tHashMap<unsigned int, Instruction> m_instructions;");
     println!("}};");
 
     println!("}} // spvgentwo"); // namespace
@@ -471,11 +471,11 @@ fn spv_cpp(spv: Grammar)
             None => 0
         };
 
-        println!("\tm_instructions.emplaceUnique(spv::Op::{}, Instruction{{\"{}\", spv::Op::{}, _pAllocator, _pAllocator, _pAllocator, {}}});", instr.opname, instr.opname, instr.opname, ver);
+        println!("\tm_instructions.emplaceUnique({}u, Instruction{{\"{}\", spv::Op::{}, _pAllocator, _pAllocator, _pAllocator, {}}});", opcode, instr.opname, instr.opname, ver);
     }
     println!("}};"); // constructor
 
-    println!("const Grammar::Instruction* Grammar::getInfo(spv::Op _opcode) const\n{{");
+    println!("const Grammar::Instruction* Grammar::getInfo(unsigned int _opcode) const\n{{");
         println!("\treturn m_instructions.get(_opcode);");
     println!("}};"); // getInfo
 }
