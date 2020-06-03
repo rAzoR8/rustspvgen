@@ -383,6 +383,12 @@ fn grammar_header(spv: Grammar)
     println!("namespace spvgentwo\n{{");
 
     println!("class Grammar\n{{");
+    println!("\tpublic:");
+        println!("\tenum class Extension : unsigned short\n\t{{");
+            println!("\t\tCore = 0,");
+            println!("\t\tGlsl = 1,");
+            println!("\t\tOpenCl = 2,");  
+        println!("\t}};");
 
         let mut categories = HashSet::new();
         println!("\tenum class OperandCategory : unsigned short\n\t{{");
@@ -415,18 +421,17 @@ fn grammar_header(spv: Grammar)
 
         println!("\tstruct Instruction\n\t{{");
             println!("\t\tconst char* name;");
-            println!("\t\tspv::Op opcode;");
             println!("\t\tVector<Operand> operands;");
             println!("\t\tVector<spv::Capability> capabilities;");
             println!("\t\tVector<const char*> extensions;");
             println!("\t\tunsigned int version;");
         println!("\t}};");
 
-    println!("\tpublic:");
         println!("\t\tGrammar(IAllocator* _pAllocator);");
-        println!("\t\tconst Instruction* getInfo(unsigned int _opcode) const;");
+        println!("\t\tconst Instruction* getInfo(unsigned int _opcode, Extension _extension = Extension::Core) const;");
     println!("\tprivate:");
-        println!("\t\tHashMap<unsigned int, Instruction> m_instructions;");
+        //println!("\t\tunion Key {{ Key(unsigned int o) : extension(Extension::Core), opcode(o) {{}} Key(Extension e, unsigned int o) : extension(e), opcode(o) {{}} operator unsigned long long() const {{return key;}} unsigned long long key = 0u; struct {{Extension extension; unsigned int opcode;}}; }};");
+        println!("\t\tHashMap<Hash64, Instruction> m_instructions;");
     println!("}};");
 
     println!("}} // spvgentwo"); // namespace
@@ -436,9 +441,9 @@ fn grammar_cpp(spv: Grammar, glsl: Grammar, opencl: Grammar)
 {
     let operand_kinds = spv.operand_kinds.unwrap_or(Vec::new());
 
-    println!("#include \"spvgentwo/Grammar.h\"\n");
-    println!("#include \"spvgentwo/Glsl.h\"\n");
-    println!("#include \"spvgentwo/OpenCl.h\"\n");
+    println!("#include \"spvgentwo/Grammar.h\"");
+    println!("#include \"spvgentwo/Glsl.h\"");
+    println!("#include \"spvgentwo/OpenCl.h\"");
     println!("using namespace spvgentwo;\n");
 
     // let mut kinds = HashMap::new();
@@ -457,7 +462,7 @@ fn grammar_cpp(spv: Grammar, glsl: Grammar, opencl: Grammar)
         }
     }
 
-    println!("Grammar::Grammar(IAllocator* _pAllocator) : m_instructions(_pAllocator, {})\n{{", unique_instructions.len());
+    println!("Grammar::Grammar(IAllocator* _pAllocator) : m_instructions(_pAllocator, {})\n{{", unique_instructions.len() + glsl.instructions.len() + opencl.instructions.len());
     for (opcode, instr) in unique_instructions
     {
         let ver: u32 = match &instr.version
@@ -473,12 +478,24 @@ fn grammar_cpp(spv: Grammar, glsl: Grammar, opencl: Grammar)
             None => 0
         };
 
-        println!("\tm_instructions.emplaceUnique({}u, Instruction{{\"{}\", spv::Op::{}, _pAllocator, _pAllocator, _pAllocator, {}}});", opcode, instr.opname, instr.opname, ver);
+        println!("\tm_instructions.emplaceUnique({}u, Instruction{{\"{}\", _pAllocator, _pAllocator, _pAllocator, {}}});", opcode, instr.opname, ver);
     }
+
+    for instr in glsl.instructions
+    {
+        println!("\tm_instructions.emplaceUnique(1ull << 32u | {}u, Instruction{{\"{}\", _pAllocator, _pAllocator, _pAllocator, 0}});", instr.opcode, instr.opname);
+    }
+
+    for instr in opencl.instructions
+    {
+        println!("\tm_instructions.emplaceUnique(2ull << 32u | {}u, Instruction{{\"{}\", _pAllocator, _pAllocator, _pAllocator, 0}});", instr.opcode, instr.opname);
+    }
+
     println!("}};"); // constructor
 
-    println!("const Grammar::Instruction* Grammar::getInfo(unsigned int _opcode) const\n{{");
-        println!("\treturn m_instructions.get(_opcode);");
+    println!("const Grammar::Instruction* Grammar::getInfo(unsigned int _opcode, Extension _extension) const\n{{");
+        println!("\tHash64 hash = static_cast<Hash64>(_extension) << 32u | _opcode;");
+        println!("\treturn m_instructions.get(hash);");
     println!("}};"); // getInfo
 }
 
