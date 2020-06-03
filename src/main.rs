@@ -8,6 +8,8 @@ extern crate serde;
 use serde_derive::Deserialize;
 use std::collections::HashSet;
 use std::collections::HashMap;
+use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 
 #[derive(Debug)]
 enum Extension
@@ -90,7 +92,7 @@ fn spv_defs(spv: Grammar)
     println!("\tstatic constexpr unsigned int OpCodeMask = 0xffff;");
     println!("\tstatic constexpr unsigned int WordCountShift = 16;");
 
-    let mut extensions = HashSet::new();
+    let mut extensions = BTreeSet::new();
 
     // scann for extensions
     for op in &operand_kinds {
@@ -437,15 +439,26 @@ fn spv_cpp(spv: Grammar)
     println!("#include \"spvgentwo/Grammar.h\"\n");
     println!("using namespace spvgentwo;\n");
 
-    let mut kinds = HashMap::new();
-    for elem in &operand_kinds {
-        kinds.insert(&elem.kind, &elem.category);
+    // let mut kinds = HashMap::new();
+    // for elem in &operand_kinds {
+    //     kinds.insert(&elem.kind, &elem.category);
+    // }
+
+    let mut unique_instructions = BTreeMap::new();
+
+    for instr in &spv.instructions
+    {        
+        let entry = &unique_instructions.entry(instr.opcode).or_insert(instr);
+        // filter out / replace vendor extension instructions with their ratified versions
+        if entry.opname != instr.opname && (instr.opname.ends_with("KHR") || instr.opname.ends_with("EXT")){
+            unique_instructions.insert(instr.opcode, instr);
+        }
     }
 
-    println!("Grammar::Grammar(IAllocator* _pAllocator) : m_instructions(_pAllocator)\n{{");
-    for instr in spv.instructions
+    println!("Grammar::Grammar(IAllocator* _pAllocator) : m_instructions(_pAllocator, {})\n{{", unique_instructions.len());
+    for (opcode, instr) in unique_instructions
     {
-        let ver: u32 = match instr.version
+        let ver: u32 = match &instr.version
         {
             Some(s) => {
                 let vec: Vec<&str> = s.split(".").collect();
