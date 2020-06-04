@@ -452,30 +452,42 @@ fn print_instruction(instr: &Instruction, kind_categories: &std::collections::Ha
         None => 0
     };
 
-    println!("\t{{");
-        println!("\t\tauto& instr = m_instructions.emplaceUnique({}ull << 32u |{}u, Instruction{{\"{}\", _pAllocator, _pAllocator, _pAllocator, {}}}).kv.value;", shift, instr.opcode, instr.opname, ver);
-        if instr.operands.is_some(){
-            for op in instr.operands.as_ref().unwrap() {
-                let category = kind_categories[&op.kind];
-                let quantifier = match &op.quantifier {Some(s) => if s == "?" { "Quantifier::ZeroOrOne"} else if s == "*" {"Quantifier::ZeroOrAny"} else {"Quantifier::One"}, None => "Quantifier::One"};
-                let name =  match op.name {Some(ref s) => s, None => ""};
-                println!("\t\tinstr.operands.emplace_back(OperandKind::{}, OperandCategory::{}, \"{}\",{});", &op.kind, category, name.replace("\n", ""), quantifier);
-            }
-        }
+    let has_props = instr.operands.is_some() || instr.capabilities.is_some() || instr.extensions.is_some();
+    if has_props {
+        println!("\t{{");
+        print!("\t\tauto& instr = ");
+    } else {print!("\t");}
 
-        if instr.capabilities.is_some(){
-            for cap in instr.capabilities.as_ref().unwrap() {
-                println!("\t\tinstr.capabilities.emplace_back(spv::Capability::{});", cap);
-            }
+    print!("m_instructions.emplaceUnique({}ull << 32u |{}u, Instruction{{\"{}\", _pAllocator, _pAllocator, _pAllocator, {}}})", shift, instr.opcode, instr.opname, ver);
+    
+    if has_props {
+        println!(".kv.value;");
+    } else {println!(";");}
+    
+    if instr.operands.is_some(){
+        for op in instr.operands.as_ref().unwrap() {
+            let category = kind_categories[&op.kind];
+            let quantifier = match &op.quantifier {Some(s) => if s == "?" { "Quantifier::ZeroOrOne"} else if s == "*" {"Quantifier::ZeroOrAny"} else {"Quantifier::One"}, None => "Quantifier::One"};
+            let name =  match op.name {Some(ref s) => s, None => if op.kind == "IdResultType" { "ResultType"} else if op.kind == "IdResult" { "Result" } else {""}};
+            println!("\t\tinstr.operands.emplace_back(OperandKind::{}, OperandCategory::{}, \"{}\",{});", &op.kind, category, name.replace("\n", ""), quantifier);
         }
+    }
 
-        if instr.extensions.is_some(){
-            for ext in instr.extensions.as_ref().unwrap() {
-                println!("\t\tinstr.extensions.emplace_back(spv::Extension::{});", ext);
-            }
+    if instr.capabilities.is_some(){
+        for cap in instr.capabilities.as_ref().unwrap() {
+            println!("\t\tinstr.capabilities.emplace_back(spv::Capability::{});", cap);
         }
-    println!("\t}}")
+    }
 
+    if instr.extensions.is_some(){
+        for ext in instr.extensions.as_ref().unwrap() {
+            println!("\t\tinstr.extensions.emplace_back(spv::Extension::{});", ext);
+        }
+    }
+
+    if has_props {
+        println!("\t}}")
+    }
 }
 
 fn grammar_cpp(spv: Grammar, glsl: Grammar, opencl: Grammar)
