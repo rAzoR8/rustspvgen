@@ -190,7 +190,7 @@ fn spv_defs(spv: Grammar)
 
     // extensions enum
     {
-        println!("\tenum class Extensions : unsigned\n\t{{");
+        println!("\tenum class Extension : unsigned\n\t{{");
         let mut i = 0;
         for ext in &extensions
         {
@@ -408,8 +408,9 @@ fn grammar_header(spv: Grammar)
         println!("\t}};");
 
         println!("\tenum class Quantifier\n\t{{");
-            println!("\t\tOptional,");
-            println!("\t\tAnyCount");   
+            println!("\t\tZeroOrOne, // zero or one");
+            println!("\t\tZeroOrAny, // zero or any");
+            println!("\t\tOne, // exactly once");
         println!("\t}};");
 
         println!("\tstruct Operand\n\t{{");
@@ -423,14 +424,13 @@ fn grammar_header(spv: Grammar)
             println!("\t\tconst char* name;");
             println!("\t\tVector<Operand> operands;");
             println!("\t\tVector<spv::Capability> capabilities;");
-            println!("\t\tVector<const char*> extensions;");
+            println!("\t\tVector<spv::Extension> extensions;");
             println!("\t\tunsigned int version;");
         println!("\t}};");
 
         println!("\t\tGrammar(IAllocator* _pAllocator);");
         println!("\t\tconst Instruction* getInfo(unsigned int _opcode, Extension _extension = Extension::Core) const;");
     println!("\tprivate:");
-        //println!("\t\tunion Key {{ Key(unsigned int o) : extension(Extension::Core), opcode(o) {{}} Key(Extension e, unsigned int o) : extension(e), opcode(o) {{}} operator unsigned long long() const {{return key;}} unsigned long long key = 0u; struct {{Extension extension; unsigned int opcode;}}; }};");
         println!("\t\tHashMap<Hash64, Instruction> m_instructions;");
     println!("}};");
 
@@ -446,10 +446,10 @@ fn grammar_cpp(spv: Grammar, glsl: Grammar, opencl: Grammar)
     println!("#include \"spvgentwo/OpenCl.h\"");
     println!("using namespace spvgentwo;\n");
 
-    // let mut kinds = HashMap::new();
-    // for elem in &operand_kinds {
-    //     kinds.insert(&elem.kind, &elem.category);
-    // }
+    let mut kind_categories = HashMap::new();
+    for elem in &operand_kinds {
+        kind_categories.insert(&elem.kind, &elem.category);
+    }
 
     let mut unique_instructions = BTreeMap::new();
 
@@ -478,7 +478,29 @@ fn grammar_cpp(spv: Grammar, glsl: Grammar, opencl: Grammar)
             None => 0
         };
 
-        println!("\tm_instructions.emplaceUnique({}u, Instruction{{\"{}\", _pAllocator, _pAllocator, _pAllocator, {}}});", opcode, instr.opname, ver);
+        println!("\t{{");
+            println!("\t\tauto& instr = m_instructions.emplaceUnique({}u, Instruction{{\"{}\", _pAllocator, _pAllocator, _pAllocator, {}}}).kv.value;", opcode, instr.opname, ver);
+            if instr.operands.is_some(){
+                for op in instr.operands.as_ref().unwrap() {
+                    let category = kind_categories[&op.kind];
+                    let quantifier = match &op.quantifier {Some(s) => if s == "?" { "Quantifier::ZeroOrOne"} else if s == "*" {"Quantifier::ZeroOrAny"} else {"Quantifier::One"}, None => "Quantifier::One"};
+                    let name =  match op.name {Some(ref s) => s, None => ""};
+                    println!("\t\tinstr.operands.emplace_back(OperandKind::{}, OperandCategory::{}, \"{}\",{});", &op.kind, category, name.replace("\n", ""), quantifier);
+                }
+            }
+
+            if instr.capabilities.is_some(){
+                for cap in instr.capabilities.as_ref().unwrap() {
+                    println!("\t\tinstr.capabilities.emplace_back(spv::Capability::{});", cap);
+                }
+            }
+
+            if instr.extensions.is_some(){
+                for ext in instr.extensions.as_ref().unwrap() {
+                    println!("\t\tinstr.extensions.emplace_back(spv::Extension::{});", ext);
+                }
+            }
+        println!("\t}}")
     }
 
     for instr in glsl.instructions
