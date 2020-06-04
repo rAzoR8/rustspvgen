@@ -437,6 +437,47 @@ fn grammar_header(spv: Grammar)
     println!("}} // spvgentwo"); // namespace
 }
 
+fn print_instruction(instr: &Instruction, kind_categories: &std::collections::HashMap<&std::string::String, &std::string::String>, shift: u32)
+{
+    let ver: u32 = match &instr.version
+    {
+        Some(s) => {
+            let vec: Vec<&str> = s.split(".").collect();
+            if vec.len() == 2 {
+                let major: u32 = vec.first().unwrap().to_string().parse().unwrap();
+                let minor: u32 = vec.last().unwrap().to_string().parse().unwrap();
+                (major << 16) | (minor << 8)
+            }else {0} // fail case
+        },
+        None => 0
+    };
+
+    println!("\t{{");
+        println!("\t\tauto& instr = m_instructions.emplaceUnique({}ull << 32u |{}u, Instruction{{\"{}\", _pAllocator, _pAllocator, _pAllocator, {}}}).kv.value;", shift, instr.opcode, instr.opname, ver);
+        if instr.operands.is_some(){
+            for op in instr.operands.as_ref().unwrap() {
+                let category = kind_categories[&op.kind];
+                let quantifier = match &op.quantifier {Some(s) => if s == "?" { "Quantifier::ZeroOrOne"} else if s == "*" {"Quantifier::ZeroOrAny"} else {"Quantifier::One"}, None => "Quantifier::One"};
+                let name =  match op.name {Some(ref s) => s, None => ""};
+                println!("\t\tinstr.operands.emplace_back(OperandKind::{}, OperandCategory::{}, \"{}\",{});", &op.kind, category, name.replace("\n", ""), quantifier);
+            }
+        }
+
+        if instr.capabilities.is_some(){
+            for cap in instr.capabilities.as_ref().unwrap() {
+                println!("\t\tinstr.capabilities.emplace_back(spv::Capability::{});", cap);
+            }
+        }
+
+        if instr.extensions.is_some(){
+            for ext in instr.extensions.as_ref().unwrap() {
+                println!("\t\tinstr.extensions.emplace_back(spv::Extension::{});", ext);
+            }
+        }
+    println!("\t}}")
+
+}
+
 fn grammar_cpp(spv: Grammar, glsl: Grammar, opencl: Grammar)
 {
     let operand_kinds = spv.operand_kinds.unwrap_or(Vec::new());
@@ -465,52 +506,17 @@ fn grammar_cpp(spv: Grammar, glsl: Grammar, opencl: Grammar)
     println!("Grammar::Grammar(IAllocator* _pAllocator) : m_instructions(_pAllocator, {})\n{{", unique_instructions.len() + glsl.instructions.len() + opencl.instructions.len());
     for (opcode, instr) in unique_instructions
     {
-        let ver: u32 = match &instr.version
-        {
-            Some(s) => {
-                let vec: Vec<&str> = s.split(".").collect();
-                if vec.len() == 2 {
-                    let major: u32 = vec.first().unwrap().to_string().parse().unwrap();
-                    let minor: u32 = vec.last().unwrap().to_string().parse().unwrap();
-                    (major << 16) | (minor << 8)
-                }else {0} // fail case
-            },
-            None => 0
-        };
-
-        println!("\t{{");
-            println!("\t\tauto& instr = m_instructions.emplaceUnique({}u, Instruction{{\"{}\", _pAllocator, _pAllocator, _pAllocator, {}}}).kv.value;", opcode, instr.opname, ver);
-            if instr.operands.is_some(){
-                for op in instr.operands.as_ref().unwrap() {
-                    let category = kind_categories[&op.kind];
-                    let quantifier = match &op.quantifier {Some(s) => if s == "?" { "Quantifier::ZeroOrOne"} else if s == "*" {"Quantifier::ZeroOrAny"} else {"Quantifier::One"}, None => "Quantifier::One"};
-                    let name =  match op.name {Some(ref s) => s, None => ""};
-                    println!("\t\tinstr.operands.emplace_back(OperandKind::{}, OperandCategory::{}, \"{}\",{});", &op.kind, category, name.replace("\n", ""), quantifier);
-                }
-            }
-
-            if instr.capabilities.is_some(){
-                for cap in instr.capabilities.as_ref().unwrap() {
-                    println!("\t\tinstr.capabilities.emplace_back(spv::Capability::{});", cap);
-                }
-            }
-
-            if instr.extensions.is_some(){
-                for ext in instr.extensions.as_ref().unwrap() {
-                    println!("\t\tinstr.extensions.emplace_back(spv::Extension::{});", ext);
-                }
-            }
-        println!("\t}}")
+        print_instruction(instr, &kind_categories, 0);
     }
 
     for instr in glsl.instructions
     {
-        println!("\tm_instructions.emplaceUnique(1ull << 32u | {}u, Instruction{{\"{}\", _pAllocator, _pAllocator, _pAllocator, 0}});", instr.opcode, instr.opname);
+        print_instruction(&instr, &kind_categories, 1);
     }
 
     for instr in opencl.instructions
     {
-        println!("\tm_instructions.emplaceUnique(2ull << 32u | {}u, Instruction{{\"{}\", _pAllocator, _pAllocator, _pAllocator, 0}});", instr.opcode, instr.opname);
+        print_instruction(&instr, &kind_categories, 2);
     }
 
     println!("}};"); // constructor
