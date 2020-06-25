@@ -166,8 +166,7 @@ fn spv_defs(spv: Grammar)
                     println!("\t}};");   
                 },
                 None => {}
-            } 
-
+            }
         }        
     }
 
@@ -406,6 +405,34 @@ fn grammar_header(spv: Grammar)
             println!("\t\t{},",elem.kind);
         }
         println!("\t}};");
+
+        // operand name lookup tables
+        for op in &operand_kinds {
+            if op.category == "ValueEnum" || op.category == "BitEnum" {
+                match op.enumerants.as_ref()  {
+                    Some(v) => {
+                        println!("\tstatic constexpr const char* {}Names[] =\n\t{{", op.kind);
+                        for enumval in v {
+                            if op.kind == "Dim" && enumval.enumerant.len() == 2{
+                                println!("\t\t\"Dim{}\",", enumval.enumerant);
+                            }else{
+                                println!("\t\t\"{}\",", enumval.enumerant);
+                            }
+                        }
+                        println!("\t}};");    
+                    },
+                    None => {}
+                }  
+            }        
+        }
+
+        println!("\tstatic constexpr const char* const* OperandKindNames[] =\n\t{{");
+        for op in &operand_kinds {
+            if op.category == "ValueEnum" || op.category == "BitEnum" {
+                println!("\t\t{}Names,", op.kind);
+            }
+        }
+        println!("\t}};"); 
 
         println!("\tenum class Quantifier\n\t{{");
             println!("\t\tZeroOrOne, // zero or one");
