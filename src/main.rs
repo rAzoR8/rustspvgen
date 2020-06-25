@@ -406,34 +406,6 @@ fn grammar_header(spv: Grammar)
         }
         println!("\t}};");
 
-        // operand name lookup tables
-        for op in &operand_kinds {
-            if op.category == "ValueEnum" || op.category == "BitEnum" {
-                match op.enumerants.as_ref()  {
-                    Some(v) => {
-                        println!("\tstatic constexpr const char* {}Names[] =\n\t{{", op.kind);
-                        for enumval in v {
-                            if op.kind == "Dim" && enumval.enumerant.len() == 2{
-                                println!("\t\t\"Dim{}\",", enumval.enumerant);
-                            }else{
-                                println!("\t\t\"{}\",", enumval.enumerant);
-                            }
-                        }
-                        println!("\t}};");    
-                    },
-                    None => {}
-                }  
-            }        
-        }
-
-        println!("\tstatic constexpr const char* const* OperandKindNames[] =\n\t{{");
-        for op in &operand_kinds {
-            if op.category == "ValueEnum" || op.category == "BitEnum" {
-                println!("\t\t{}Names,", op.kind);
-            }
-        }
-        println!("\t}};"); 
-
         println!("\tenum class Quantifier\n\t{{");
             println!("\t\tZeroOrOne, // zero or one");
             println!("\t\tZeroOrAny, // zero or any");
@@ -457,8 +429,10 @@ fn grammar_header(spv: Grammar)
 
         println!("\t\tGrammar(IAllocator* _pAllocator);");
         println!("\t\tconst Instruction* getInfo(unsigned int _opcode, Extension _extension = Extension::Core) const;");
+        println!("\t\tconst char* getOperandName(OperandKind _kind, unsigned int _literalValue) const;");
     println!("\tprivate:");
         println!("\t\tHashMap<Hash64, Instruction> m_instructions;");
+        println!("\t\tHashMap<Hash64, const char*> m_operandNames;");
     println!("}};");
 
     println!("}} // spvgentwo"); // namespace
@@ -542,7 +516,19 @@ fn grammar_cpp(spv: Grammar, glsl: Grammar, opencl: Grammar)
         }
     }
 
-    println!("Grammar::Grammar(IAllocator* _pAllocator) : m_instructions(_pAllocator, {})\n{{", unique_instructions.len() + glsl.instructions.len() + opencl.instructions.len());
+    let mut operand_enum_count = 0;
+    for op in &operand_kinds {
+        if op.category == "ValueEnum" || op.category == "BitEnum" {
+            match op.enumerants.as_ref()  {
+                Some(v) => {
+                    operand_enum_count += v.len();
+                },
+                None => {}
+            }  
+        }        
+    }
+
+    println!("Grammar::Grammar(IAllocator* _pAllocator) : m_instructions(_pAllocator, {}), m_operandNames(_pAllocator, {})\n{{", unique_instructions.len() + glsl.instructions.len() + opencl.instructions.len(), operand_enum_count);
     for (opcode, instr) in unique_instructions
     {
         print_instruction(instr, &kind_categories, 0);
@@ -558,12 +544,43 @@ fn grammar_cpp(spv: Grammar, glsl: Grammar, opencl: Grammar)
         print_instruction(&instr, &kind_categories, 2);
     }
 
+    // operand name lookup tables
+    for op in &operand_kinds {
+        if op.category == "ValueEnum" || op.category == "BitEnum" {
+            match op.enumerants.as_ref()  {
+                Some(v) => {
+                    for enumval in v {
+                        print!("\tm_operandNames.emplaceUnique(Hash64(OperandKind::{}) << 32u | ", op.kind);
+                        match &enumval.value
+                        {
+                            serde_json::Value::Number(x) => {print!("{}u, ", x)},
+                            serde_json::Value::String(s) => {print!("{}u, ", s)}
+                            _ => {}
+                        }
+                        if op.kind == "Dim" && enumval.enumerant.len() == 2{
+                            println!("\"Dim{}\");", enumval.enumerant);
+                        }else{
+                            println!("\"{}\");", enumval.enumerant);
+                        }
+                    }
+                },
+                None => {}
+            }  
+        }        
+    }
+
     println!("}};"); // constructor
 
     println!("const Grammar::Instruction* Grammar::getInfo(unsigned int _opcode, Extension _extension) const\n{{");
         println!("\tHash64 hash = static_cast<Hash64>(_extension) << 32u | _opcode;");
         println!("\treturn m_instructions.get(hash);");
     println!("}};"); // getInfo
+
+    println!("const char* Grammar::getOperandName(OperandKind _kind, unsigned int _literalValue) const\n{{");
+        println!("\tHash64 hash = static_cast<Hash64>(_kind) << 32u | _literalValue;");
+        println!("\tconst char** name = m_operandNames.get(hash);");
+        println!("\treturn name == nullptr ? nullptr : *name;");
+    println!("}};"); // getOperandName
 }
 
 fn ext_defs(spv: Grammar, ext: Extension)
