@@ -459,7 +459,7 @@ fn print_instruction(instr: &Instruction, kind_categories: &std::collections::Ha
         print!("\t\tauto& instr = ");
     } else {print!("\t");}
 
-    print!("m_instructions.emplaceUnique({}ull << 32u |{}u, Instruction{{\"{}\", _pAllocator, _pAllocator, _pAllocator, {}}})", shift, instr.opcode, instr.opname, ver);
+    print!("m_instructions.emplaceUnique(Hash64({}u, {}u), Instruction{{\"{}\", _pAllocator, _pAllocator, _pAllocator, {}}})", instr.opcode, shift, instr.opname, ver);
     
     if has_props {
         println!(".kv.value;");
@@ -550,13 +550,14 @@ fn grammar_cpp(spv: Grammar, glsl: Grammar, opencl: Grammar)
             match op.enumerants.as_ref()  {
                 Some(v) => {
                     for enumval in v {
-                        print!("\tm_operandNames.emplaceUnique(Hash64(OperandKind::{}) << 32u | ", op.kind);
+                        print!("\tm_operandNames.emplaceUnique(Hash64(");
                         match &enumval.value
                         {
                             serde_json::Value::Number(x) => {print!("{}u, ", x)},
-                            serde_json::Value::String(s) => {print!("{}u, ", s)}
+                            serde_json::Value::String(s) => {print!("{}u, ", s)} // fail?
                             _ => {}
                         }
+                        print!("static_cast<unsigned int>(OperandKind::{})),", op.kind);
                         if op.kind == "Dim" && enumval.enumerant.len() == 2{
                             println!("\"Dim{}\");", enumval.enumerant);
                         }else{
@@ -572,13 +573,11 @@ fn grammar_cpp(spv: Grammar, glsl: Grammar, opencl: Grammar)
     println!("}};"); // constructor
 
     println!("const Grammar::Instruction* Grammar::getInfo(unsigned int _opcode, Extension _extension) const\n{{");
-        println!("\tHash64 hash = static_cast<Hash64>(_extension) << 32u | _opcode;");
-        println!("\treturn m_instructions.get(hash);");
+        println!("\treturn m_instructions.get(Hash64(_opcode, static_cast<unsigned int>(_extension)));");
     println!("}};"); // getInfo
 
     println!("const char* Grammar::getOperandName(OperandKind _kind, unsigned int _literalValue) const\n{{");
-        println!("\tHash64 hash = static_cast<Hash64>(_kind) << 32u | _literalValue;");
-        println!("\tconst char** name = m_operandNames.get(hash);");
+        println!("\tconst char** name = m_operandNames.get(Hash64(_literalValue, static_cast<unsigned int>(_kind)));");
         println!("\treturn name == nullptr ? nullptr : *name;");
     println!("}};"); // getOperandName
 }
