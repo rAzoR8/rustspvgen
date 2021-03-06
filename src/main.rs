@@ -464,14 +464,19 @@ fn print_instruction(instr: &Instruction, kind_categories: &std::collections::Ha
         print!("\t\tauto& instr = ");
     } else {print!("\t");}
 
-    print!("m_instructions.emplaceUnique(Hash64({}u, {}u), Instruction{{\"{}\", _pAllocator, _pAllocator, _pAllocator, {}}})", instr.opcode, shift, instr.opname, ver);
+    print!("m_instructions.emplaceUnique(Hash64({}u, {}u), Instruction{{\"{}\", _pAllocator, _pAllocator, _pAllocator, {}u}})", instr.opcode, shift, instr.opname, ver);
     
     if has_props {
         println!(".kv.value;");
     } else {println!(";");}
     
-    if instr.operands.is_some(){
-        for op in instr.operands.as_ref().unwrap() {
+    if instr.operands.is_some() {
+        let ops = instr.operands.as_ref().unwrap();
+        if ops.len() > 1 {
+            println!("\t\tinstr.operands.reserve({}u);", ops.len());
+        }
+
+        for op in ops {
             let category = kind_categories[&op.kind];
             let quantifier = match &op.quantifier {Some(s) => if s == "?" { "Quantifier::ZeroOrOne"} else if s == "*" {"Quantifier::ZeroOrAny"} else {"Quantifier::One"}, None => "Quantifier::One"};
             let name =  match op.name {Some(ref s) => s, None => if op.kind == "IdResultType" { "ResultType"} else if op.kind == "IdResult" { "Result" } else {""}};
@@ -480,13 +485,22 @@ fn print_instruction(instr: &Instruction, kind_categories: &std::collections::Ha
     }
 
     if instr.capabilities.is_some(){
-        for cap in instr.capabilities.as_ref().unwrap() {
+        let caps = instr.capabilities.as_ref().unwrap();
+        if caps.len() > 1 {
+            println!("\t\tinstr.capabilities.reserve({}u);", caps.len());
+        }
+
+        for cap in caps {
             println!("\t\tinstr.capabilities.emplace_back(spv::Capability::{});", cap);
         }
     }
 
     if instr.extensions.is_some(){
-        for ext in instr.extensions.as_ref().unwrap() {
+        let exts = instr.extensions.as_ref().unwrap();
+        if exts.len() > 1 {
+            println!("\t\tinstr.extensions.reserve({}u);", exts.len());
+        }
+        for ext in exts {
             println!("\t\tinstr.extensions.emplace_back(spv::Extension::{});", ext);
         }
     }
@@ -530,11 +544,8 @@ fn grammar_cpp(spv: Grammar, glsl: Grammar, opencl: Grammar)
                     operand_enum_count += v.len();
 
                     for en in v {
-                        match en.parameters.as_ref() {
-                            Some(params) => {
-                                operands_with_parameters += 1;
-                            },
-                            None => {}
+                        if en.parameters.is_some() {
+                            operands_with_parameters += 1;
                         }
                     }
                 },
@@ -559,6 +570,12 @@ fn grammar_cpp(spv: Grammar, glsl: Grammar, opencl: Grammar)
                                 _ => {}
                             }
                             print!("), _pAllocator).kv.value;\n");
+
+                            if params.len() > 1
+                            {
+                                println!("\t\tparameters.reserve({}u);", params.len());
+                            }
+
                             for p in params
                             {
                                 let category = kind_categories[&p.kind];
