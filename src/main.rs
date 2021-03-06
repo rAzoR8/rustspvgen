@@ -54,7 +54,8 @@ struct Operand
 struct OperandKinds {
     category: String,
     kind: String,
-    enumerants: Option<Vec<Enumerants>>
+    enumerants: Option<Vec<Enumerants>>,
+    bases: Option<Vec<String>>
 }
 
 #[derive(Deserialize)]
@@ -64,8 +65,7 @@ struct Enumerants {
     capabilities: Option<Vec<String>>,
     parameters: Option<Vec<Parameter>>,
     extensions: Option<Vec<String>>,
-    version: Option<String>,
-    bases: Option<Vec<String>>
+    version: Option<String>
 }
 
 #[derive(Deserialize)]
@@ -383,62 +383,65 @@ fn grammar_header(spv: Grammar)
 
     println!("namespace spvgentwo\n{{");
 
-    println!("class Grammar\n{{");
-    println!("\tpublic:");
-        println!("\tenum class Extension : unsigned short\n\t{{");
-            println!("\t\tCore = 0,");
-            println!("\t\tGlsl = 1,");
-            println!("\t\tOpenCl = 2,");  
-        println!("\t}};");
+    println!("\tclass Grammar\n{{");
+    println!("\t\tpublic:");
+        println!("\t\tenum class Extension : unsigned short\n\t\t{{");
+            println!("\t\t\tCore = 0,");
+            println!("\t\t\tGlsl = 1,");
+            println!("\t\t\tOpenCl = 2,");  
+        println!("\t\t}};");
 
         let mut categories = HashSet::new();
-        println!("\tenum class OperandCategory : unsigned short\n\t{{");
+        println!("\t\tenum class OperandCategory : unsigned short\n\t\t{{");
         for elem in &operand_kinds {
             if !categories.contains(&elem.category)
             {
                 categories.insert(&elem.category);
-                println!("\t\t{},",elem.category);
+                println!("\t\t\t{},",elem.category);
             }
         }
-        println!("\t}};");
+        println!("\t\t}};");
 
-        println!("\tenum class OperandKind : unsigned short\n\t{{");
+        println!("\t\tenum class OperandKind : unsigned short\n\t\t{{");
         for elem in &operand_kinds {
-            println!("\t\t{},",elem.kind);
+            println!("\t\t\t{},",elem.kind);
         }
-        println!("\t}};");
+        println!("\t\t}};");
 
-        println!("\tenum class Quantifier\n\t{{");
-            println!("\t\tZeroOrOne, // zero or one");
-            println!("\t\tZeroOrAny, // zero or any");
-            println!("\t\tOne, // exactly once");
-        println!("\t}};");
+        println!("\t\tenum class Quantifier\n\t\t{{");
+            println!("\t\t\tZeroOrOne, // zero or one");
+            println!("\t\t\tZeroOrAny, // zero or any");
+            println!("\t\t\tOne, // exactly once");
+        println!("\t\t}};");
 
-        println!("\tstruct Operand\n\t{{");
-            println!("\t\tOperandKind kind;");
-            println!("\t\tOperandCategory category;");        
-            println!("\t\tconst char* name;");
-            println!("\t\tQuantifier quantifier;");
-        println!("\t}};");
+        println!("\t\tstruct Operand\n\t\t{{");
+            println!("\t\t\tOperandKind kind;");
+            println!("\t\t\tOperandCategory category;");        
+            println!("\t\t\tconst char* name;");
+            println!("\t\t\tQuantifier quantifier;");
+        println!("\t\t}};");
 
-        println!("\tstruct Instruction\n\t{{");
-            println!("\t\tconst char* name;");
-            println!("\t\tVector<Operand> operands;");
-            println!("\t\tVector<spv::Capability> capabilities;");
-            println!("\t\tVector<spv::Extension> extensions;");
-            println!("\t\tunsigned int version;");
-        println!("\t}};");
+        println!("\t\tstruct Instruction\n\t\t{{");
+            println!("\t\t\tconst char* name;");
+            println!("\t\t\tVector<Operand> operands;");
+            println!("\t\t\tVector<spv::Capability> capabilities;");
+            println!("\t\t\tVector<spv::Extension> extensions;");
+            println!("\t\t\tunsigned int version;");
+        println!("\t\t}};");
 
         println!("\t\tGrammar(IAllocator* _pAllocator);");
         println!("\t\tconst Instruction* getInfo(unsigned int _opcode, Extension _extension = Extension::Core) const;");
         println!("\t\tconst char* getOperandName(OperandKind _kind, unsigned int _literalValue) const;");
         println!("\t\tconst Vector<Operand>* getOperandParameters(OperandKind _kind, unsigned int _literalValue) const;");
+        println!("\t\tconst Vector<Operand>* getOperandBases(OperandKind _kind) const;");
 
     println!("\tprivate:");
-        println!("\t\tHashMap<Hash64, Vector<Operand>> m_operandParameters;");
-        println!("\t\tHashMap<Hash64, Instruction> m_instructions;");
-        println!("\t\tHashMap<Hash64, const char*> m_operandNames;");
-    println!("}};");
+    println!("\t\tHashMap<Hash64, Instruction> m_instructions;");
+    println!("\t\tHashMap<Hash64, const char*> m_operandNames;");
+    println!("\t\tHashMap<Hash64, Vector<Operand>> m_operandParameters;");
+    println!("\t\tHashMap<OperandKind, Vector<Operand>> m_operandBases;");
+
+    println!("\t}};");
 
     println!("}} // spvgentwo"); // namespace
 }
@@ -535,27 +538,47 @@ fn grammar_cpp(spv: Grammar, glsl: Grammar, opencl: Grammar)
         }
     }
 
-    let mut operands_with_parameters = 0;
+    let mut operand_bases_count = 0;
+    let mut operand_parameter_count = 0;
     let mut operand_enum_count = 0;
     for op in &operand_kinds {
-        if op.category == "ValueEnum" || op.category == "BitEnum" {
-            match op.enumerants.as_ref() {
-                Some(v) => {
-                    operand_enum_count += v.len();
+        if op.bases.is_some() {
+            operand_bases_count += 1;
+        }
+        match op.enumerants.as_ref() {
+            Some(v) => {
+                operand_enum_count += v.len();
 
-                    for en in v {
-                        if en.parameters.is_some() {
-                            operands_with_parameters += 1;
-                        }
+                for en in v {
+                    if en.parameters.is_some() {
+                        operand_parameter_count += 1;
                     }
-                },
-                None => {}
-            }  
-        }        
+                }
+            },
+            None => {}
+        }
     }
 
-    println!("Grammar::Grammar(IAllocator* _pAllocator) : m_instructions(_pAllocator, {}), m_operandNames(_pAllocator, {}), m_operandParameters(_pAllocator, {})\n{{", unique_instructions.len() + glsl.instructions.len() + opencl.instructions.len(), operand_enum_count, operands_with_parameters);
+    println!("Grammar::Grammar(IAllocator* _pAllocator) : m_instructions(_pAllocator, {}u), m_operandNames(_pAllocator, {}u), m_operandParameters(_pAllocator, {}u), m_operandBases(_pAllocator, {}u)\n{{", unique_instructions.len() + glsl.instructions.len() + opencl.instructions.len(), operand_enum_count, operand_parameter_count, operand_bases_count);
     
+    for op in &operand_kinds {
+        match op.bases.as_ref() {
+            Some(bases) => {
+                println!("\t{{");
+                println!("\t\tauto& bases = m_operandBases.emplaceUnique(OperandKind::{}, _pAllocator).kv.value;", &op.kind);
+                if bases.len() > 1 {
+                    println!("\t\tbases.reserve({}u);", bases.len());
+                }
+                for b in bases {
+                    let category = kind_categories[&b];
+                    println!("\t\tbases.emplace_back(OperandKind::{}, OperandCategory::{}, \"\", Quantifier::One);", &b, category);
+                }
+                println!("\t}}");
+            },
+            None => {}
+        }
+    }
+
     for op in &operand_kinds {
         match op.enumerants.as_ref() {
             Some(v) => {
@@ -571,8 +594,7 @@ fn grammar_cpp(spv: Grammar, glsl: Grammar, opencl: Grammar)
                             }
                             print!("), _pAllocator).kv.value;\n");
 
-                            if params.len() > 1
-                            {
+                            if params.len() > 1 {
                                 println!("\t\tparameters.reserve({}u);", params.len());
                             }
 
@@ -646,6 +668,10 @@ fn grammar_cpp(spv: Grammar, glsl: Grammar, opencl: Grammar)
 
     println!("const Vector<Grammar::Operand>* Grammar::getOperandParameters(OperandKind _kind, unsigned int _literalValue) const\n{{");
         println!("\treturn m_operandParameters.get(Hash64(static_cast<unsigned int>(_kind), _literalValue));");
+    println!("}};"); // getOperandParameters
+
+    println!("const Vector<Grammar::Operand>* Grammar::getOperandBases(OperandKind _kind) const\n{{");
+        println!("\treturn m_operandBases.get(_kind);");
     println!("}};"); // getOperandParameters
 }
 
