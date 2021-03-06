@@ -64,13 +64,15 @@ struct Enumerants {
     capabilities: Option<Vec<String>>,
     parameters: Option<Vec<Parameter>>,
     extensions: Option<Vec<String>>,
-    version: Option<String>
+    version: Option<String>,
+    bases: Option<Vec<String>>
 }
 
 #[derive(Deserialize)]
 struct Parameter
 {
-    kind: String
+    kind: String,
+    name: Option<String>
 }
 
 fn spv_defs(spv: Grammar)
@@ -430,7 +432,10 @@ fn grammar_header(spv: Grammar)
         println!("\t\tGrammar(IAllocator* _pAllocator);");
         println!("\t\tconst Instruction* getInfo(unsigned int _opcode, Extension _extension = Extension::Core) const;");
         println!("\t\tconst char* getOperandName(OperandKind _kind, unsigned int _literalValue) const;");
+        println!("\t\tconst Vector<Operand>* getOperandParameters(OperandKind _kind, unsigned int _literalValue) const;");
+
     println!("\tprivate:");
+        println!("\t\tHashMap<Hash64, Vector<Operand>> m_operandParameters;");
         println!("\t\tHashMap<Hash64, Instruction> m_instructions;");
         println!("\t\tHashMap<Hash64, const char*> m_operandNames;");
     println!("}};");
@@ -470,7 +475,7 @@ fn print_instruction(instr: &Instruction, kind_categories: &std::collections::Ha
             let category = kind_categories[&op.kind];
             let quantifier = match &op.quantifier {Some(s) => if s == "?" { "Quantifier::ZeroOrOne"} else if s == "*" {"Quantifier::ZeroOrAny"} else {"Quantifier::One"}, None => "Quantifier::One"};
             let name =  match op.name {Some(ref s) => s, None => if op.kind == "IdResultType" { "ResultType"} else if op.kind == "IdResult" { "Result" } else {""}};
-            println!("\t\tinstr.operands.emplace_back(OperandKind::{}, OperandCategory::{}, \"{}\",{});", &op.kind, category, name.replace("\n", ""), quantifier);
+            println!("\t\tinstr.operands.emplace_back(OperandKind::{}, OperandCategory::{}, \"{}\", {});", &op.kind, category, name.replace("\n", ""), quantifier);
         }
     }
 
@@ -516,19 +521,60 @@ fn grammar_cpp(spv: Grammar, glsl: Grammar, opencl: Grammar)
         }
     }
 
+    let mut operands_with_parameters = 0;
     let mut operand_enum_count = 0;
     for op in &operand_kinds {
         if op.category == "ValueEnum" || op.category == "BitEnum" {
-            match op.enumerants.as_ref()  {
+            match op.enumerants.as_ref() {
                 Some(v) => {
                     operand_enum_count += v.len();
+
+                    for en in v {
+                        match en.parameters.as_ref() {
+                            Some(params) => {
+                                operands_with_parameters += 1;
+                            },
+                            None => {}
+                        }
+                    }
                 },
                 None => {}
             }  
         }        
     }
 
-    println!("Grammar::Grammar(IAllocator* _pAllocator) : m_instructions(_pAllocator, {}), m_operandNames(_pAllocator, {})\n{{", unique_instructions.len() + glsl.instructions.len() + opencl.instructions.len(), operand_enum_count);
+    println!("Grammar::Grammar(IAllocator* _pAllocator) : m_instructions(_pAllocator, {}), m_operandNames(_pAllocator, {}), m_operandParameters(_pAllocator, {})\n{{", unique_instructions.len() + glsl.instructions.len() + opencl.instructions.len(), operand_enum_count, operands_with_parameters);
+    
+    for op in &operand_kinds {
+        match op.enumerants.as_ref() {
+            Some(v) => {
+                for en in v {
+                    match en.parameters.as_ref() {
+                        Some(params) => {
+                            println!("\t{{");
+                            print!("\t\tauto& parameters = m_operandParameters.emplaceUnique(Hash64(static_cast<unsigned int>(OperandKind::{}), ",  &op.kind);
+                            match &en.value {
+                                serde_json::Value::Number(x) => {print!("{}", x)},
+                                serde_json::Value::String(s) => {print!("{}", s)}
+                                _ => {}
+                            }
+                            print!("), _pAllocator).kv.value;\n");
+                            for p in params
+                            {
+                                let category = kind_categories[&p.kind];
+                                let name = match p.name {Some(ref s) => s, None => {""}};
+                                println!("\t\tparameters.emplace_back(OperandKind::{}, OperandCategory::{}, \"{}\", Quantifier::One);", &p.kind, category, name.replace("\n", ""));
+                            }
+                            println!("\t}}");                            
+                        },
+                        None => {}
+                    }
+                }
+            },
+            None => {}
+        }       
+    }
+
     for (opcode, instr) in unique_instructions
     {
         print_instruction(instr, &kind_categories, 0);
@@ -580,6 +626,10 @@ fn grammar_cpp(spv: Grammar, glsl: Grammar, opencl: Grammar)
         println!("\tconst char** name = m_operandNames.get(Hash64(_literalValue, static_cast<unsigned int>(_kind)));");
         println!("\treturn name == nullptr ? nullptr : *name;");
     println!("}};"); // getOperandName
+
+    println!("const Vector<Grammar::Operand>* Grammar::getOperandParameters(OperandKind _kind, unsigned int _literalValue) const\n{{");
+        println!("\treturn m_operandParameters.get(Hash64(static_cast<unsigned int>(_kind), _literalValue));");
+    println!("}};"); // getOperandParameters
 }
 
 fn ext_defs(spv: Grammar, ext: Extension)
