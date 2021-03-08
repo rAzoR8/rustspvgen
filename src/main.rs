@@ -403,8 +403,8 @@ fn grammar_header(spv: Grammar)
         println!("\t\t}};");
 
         println!("\t\tenum class OperandKind : unsigned short\n\t\t{{");
-        for elem in &operand_kinds {
-            println!("\t\t\t{},",elem.kind);
+        for (i, elem) in operand_kinds.iter().enumerate() {
+            println!("\t\t\t{}={}u,",elem.kind, i);
         }
         println!("\t\t}};");
 
@@ -434,6 +434,7 @@ fn grammar_header(spv: Grammar)
         println!("\t\tconst char* getOperandName(OperandKind _kind, unsigned int _literalValue) const;");
         println!("\t\tconst Vector<Operand>* getOperandParameters(OperandKind _kind, unsigned int _literalValue) const;");
         println!("\t\tconst Vector<Operand>* getOperandBases(OperandKind _kind) const;");
+        println!("\t\tstatic bool hasOperandParameters(OperandKind _kind);");
 
     println!("\tprivate:");
     println!("\t\tHashMap<Hash64, Instruction> m_instructions;");
@@ -579,16 +580,16 @@ fn grammar_cpp(spv: Grammar, glsl: Grammar, opencl: Grammar)
         }
     }
 
-    for op in &operand_kinds {
+    for (i, op) in operand_kinds.iter().enumerate() {
         match op.enumerants.as_ref() {
             Some(v) => {
                 for en in v {
                     match en.parameters.as_ref() {
                         Some(params) => {
                             println!("\t{{");
-                            print!("\t\tauto& parameters = m_operandParameters.emplaceUnique(Hash64(static_cast<unsigned int>(OperandKind::{}), ",  &op.kind);
+                            print!("\t\tauto& parameters = m_operandParameters.emplaceUnique(Hash64({}u, ", i);
                             match &en.value {
-                                serde_json::Value::Number(x) => {print!("{}", x)},
+                                serde_json::Value::Number(x) => {print!("{}u", x)},
                                 serde_json::Value::String(s) => {print!("{}", s)}
                                 _ => {}
                             }
@@ -630,19 +631,18 @@ fn grammar_cpp(spv: Grammar, glsl: Grammar, opencl: Grammar)
     }
 
     // operand name lookup tables
-    for op in &operand_kinds {
+    for (i, op) in operand_kinds.iter().enumerate() {
         if op.category == "ValueEnum" || op.category == "BitEnum" {
             match op.enumerants.as_ref()  {
                 Some(v) => {
                     for enumval in v {
-                        print!("\tm_operandNames.emplaceUnique(Hash64(");
+                        print!("\tm_operandNames.emplaceUnique(Hash64({}u, ", i);
                         match &enumval.value
                         {
-                            serde_json::Value::Number(x) => {print!("{}u, ", x)},
-                            serde_json::Value::String(s) => {print!("{}u, ", s)} // fail?
+                            serde_json::Value::Number(x) => {print!("{}u), ", x)},
+                            serde_json::Value::String(s) => {print!("{}u), ", s)}
                             _ => {}
                         }
-                        print!("static_cast<unsigned int>(OperandKind::{})),", op.kind);
                         if op.kind == "Dim" && enumval.enumerant.len() == 2{
                             println!("\"Dim{}\");", enumval.enumerant);
                         }else{
@@ -662,7 +662,7 @@ fn grammar_cpp(spv: Grammar, glsl: Grammar, opencl: Grammar)
     println!("}};"); // getInfo
 
     println!("const char* Grammar::getOperandName(OperandKind _kind, unsigned int _literalValue) const\n{{");
-        println!("\tconst char** name = m_operandNames.get(Hash64(_literalValue, static_cast<unsigned int>(_kind)));");
+        println!("\tconst char** name = m_operandNames.get(Hash64(static_cast<unsigned int>(_kind), _literalValue));");
         println!("\treturn name == nullptr ? nullptr : *name;");
     println!("}};"); // getOperandName
 
@@ -673,6 +673,25 @@ fn grammar_cpp(spv: Grammar, glsl: Grammar, opencl: Grammar)
     println!("const Vector<Grammar::Operand>* Grammar::getOperandBases(OperandKind _kind) const\n{{");
         println!("\treturn m_operandBases.get(_kind);");
     println!("}};"); // getOperandParameters
+
+    println!("bool Grammar::hasOperandParameters(OperandKind _kind)\n{{");
+    println!("\tswitch (_kind) {{");
+    println!("\tdefault: return false; // majority of operand kinds don't have parameters");
+    for op in &operand_kinds {
+        match op.enumerants.as_ref() {
+            Some(v) => {
+                for en in v {
+                    if en.parameters.is_some() {
+                        println!("\tcase OperandKind::{}: return true;", op.kind);
+                        break;
+                    }
+                }
+            },
+            None => {}
+        }       
+    }
+    println!("\t}};");
+    println!("}};"); // hasOperandParameters
 }
 
 fn ext_defs(spv: Grammar, ext: Extension)
