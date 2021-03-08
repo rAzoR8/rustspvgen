@@ -580,32 +580,38 @@ fn grammar_cpp(spv: Grammar, glsl: Grammar, opencl: Grammar)
         }
     }
 
+
     for (i, op) in operand_kinds.iter().enumerate() {
+        let mut unique_paramets = BTreeMap::new();
+
         match op.enumerants.as_ref() {
             Some(v) => {
                 for en in v {
                     match en.parameters.as_ref() {
                         Some(params) => {
-                            println!("\t{{");
-                            print!("\t\tauto& parameters = m_operandParameters.emplaceUnique(Hash64({}u, ", i);
-                            match &en.value {
-                                serde_json::Value::Number(x) => {print!("{}u", x)},
-                                serde_json::Value::String(s) => {print!("{}", s)}
-                                _ => {}
-                            }
-                            print!("), _pAllocator).kv.value;\n");
-
-                            if params.len() > 1 {
-                                println!("\t\tparameters.reserve({}u);", params.len());
-                            }
-
-                            for p in params
-                            {
-                                let category = kind_categories[&p.kind];
-                                let name = match p.name {Some(ref s) => s, None => {""}};
-                                println!("\t\tparameters.emplace_back(OperandKind::{}, OperandCategory::{}, \"{}\", Quantifier::One);", &p.kind, category, name.replace("\n", ""));
-                            }
-                            println!("\t}}");                            
+                            let st = serde_json::to_string(&en.value).unwrap_or_default();
+                            if unique_paramets.insert(st, i).is_none() {
+                                println!("\t{{");
+                                print!("\t\tauto& parameters = m_operandParameters.emplaceUnique(Hash64({}u, ", i);
+                                match &en.value {
+                                    serde_json::Value::Number(x) => {print!("{}u", x)},
+                                    serde_json::Value::String(s) => {print!("{}", s)}
+                                    _ => {}
+                                }
+                                print!("), _pAllocator).kv.value;\n");
+    
+                                if params.len() > 1 {
+                                    println!("\t\tparameters.reserve({}u);", params.len());
+                                }
+    
+                                for p in params
+                                {
+                                    let category = kind_categories[&p.kind];
+                                    let name = match p.name {Some(ref s) => s, None => {""}};
+                                    println!("\t\tparameters.emplace_back(OperandKind::{}, OperandCategory::{}, \"{}\", Quantifier::One);", &p.kind, category, name.replace("\n", ""));
+                                }
+                                println!("\t}}");
+                            }                      
                         },
                         None => {}
                     }
