@@ -86,7 +86,7 @@ fn spv_defs(spv: Grammar)
     println!("#pragma once\n");
     println!("namespace spvgentwo::spv\n{{");
 
-    println!("\tusing Id = unsigned int;");
+    println!("\tenum class Id : unsigned int;");
     println!("\tstatic constexpr unsigned int MagicNumber = {};", spv.magic_number.unwrap_or("0x07230203".to_string()));
     let version: u32 = spv.major_version.unwrap_or_default() << 16 | spv.minor_version.unwrap_or_default() << 8;
     println!("\tstatic constexpr unsigned int Version = {};", version);
