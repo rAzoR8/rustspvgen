@@ -665,20 +665,20 @@ fn grammar_cpp(spv: Grammar, glsl: Grammar, opencl: Grammar)
 
     println!("const Grammar::Instruction* Grammar::getInfo(unsigned int _opcode, Extension _extension) const\n{{");
         println!("\treturn m_instructions.get(Hash64(_opcode, static_cast<unsigned int>(_extension)));");
-    println!("}};"); // getInfo
+    println!("}}"); // getInfo
 
     println!("const char* Grammar::getOperandName(OperandKind _kind, unsigned int _literalValue) const\n{{");
         println!("\tconst char** name = m_operandNames.get(Hash64(static_cast<unsigned int>(_kind), _literalValue));");
         println!("\treturn name == nullptr ? nullptr : *name;");
-    println!("}};"); // getOperandName
+    println!("}}"); // getOperandName
 
     println!("const Vector<Grammar::Operand>* Grammar::getOperandParameters(OperandKind _kind, unsigned int _literalValue) const\n{{");
         println!("\treturn m_operandParameters.get(Hash64(static_cast<unsigned int>(_kind), _literalValue));");
-    println!("}};"); // getOperandParameters
+    println!("}}"); // getOperandParameters
 
     println!("const Vector<Grammar::Operand>* Grammar::getOperandBases(OperandKind _kind) const\n{{");
         println!("\treturn m_operandBases.get(_kind);");
-    println!("}};"); // getOperandParameters
+    println!("}}"); // getOperandParameters
 
     println!("bool Grammar::hasOperandParameters(OperandKind _kind)\n{{");
     println!("\tswitch (_kind) {{");
@@ -697,7 +697,7 @@ fn grammar_cpp(spv: Grammar, glsl: Grammar, opencl: Grammar)
         }       
     }
     println!("\t}};");
-    println!("}};"); // hasOperandParameters
+    println!("}}"); // hasOperandParameters
 }
 
 fn ext_defs(spv: Grammar, ext: Extension)
