@@ -661,7 +661,7 @@ fn grammar_cpp(spv: Grammar, glsl: Grammar, opencl: Grammar)
         }        
     }
 
-    println!("}};"); // constructor
+    println!("}}"); // constructor
 
     println!("const Grammar::Instruction* Grammar::getInfo(unsigned int _opcode, Extension _extension) const\n{{");
         println!("\treturn m_instructions.get(Hash64(_opcode, static_cast<unsigned int>(_extension)));");
