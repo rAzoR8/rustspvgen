@@ -383,7 +383,7 @@ fn grammar_header(spv: Grammar)
 
     println!("namespace spvgentwo\n{{");
 
-    println!("\tclass Grammar\n{{");
+    println!("\tclass Grammar\n\t{{");
     println!("\t\tpublic:");
         println!("\t\tenum class Extension : unsigned short\n\t\t{{");
             println!("\t\t\tCore = 0,");
@@ -582,7 +582,7 @@ fn grammar_cpp(spv: Grammar, glsl: Grammar, opencl: Grammar)
 
 
     for (i, op) in operand_kinds.iter().enumerate() {
-        let mut unique_paramets = BTreeMap::new();
+        let mut unique_parameters = BTreeMap::new();
 
         match op.enumerants.as_ref() {
             Some(v) => {
@@ -590,7 +590,7 @@ fn grammar_cpp(spv: Grammar, glsl: Grammar, opencl: Grammar)
                     match en.parameters.as_ref() {
                         Some(params) => {
                             let st = serde_json::to_string(&en.value).unwrap_or_default();
-                            if unique_paramets.insert(st, i).is_none() {
+                            if unique_parameters.insert(st, i).is_none() {
                                 println!("\t{{");
                                 print!("\t\tauto& parameters = m_operandParameters.emplaceUnique(Hash64({}u, ", i);
                                 match &en.value {
